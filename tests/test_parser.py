@@ -54,3 +54,21 @@ def test_operator_precedence_and_associativity():
 def test_invalid_character_raises_error():
     with pytest.raises(ParserError):
         Parser("a = 2 $ 3").parse()
+
+
+def test_comments_and_blank_lines_are_ignored():
+    source = """
+    # setup values
+    a = 1
+
+    # compute
+    result = (a + 2) * 3
+    show result
+    """
+    program = Parser(source).parse()
+    assert len(program.statements) == 3
+
+
+def test_show_requires_identifier():
+    with pytest.raises(ParserError):
+        Parser("show\n").parse()

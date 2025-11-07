@@ -13,8 +13,10 @@ Support the MathLang team in converting mathematical thinking processes into an 
 - **Source of truth**: `MathLang_SPECIFICATION.md`. Mirror its updates into README and other docs.
 - **Change tracking**: summarize decisions and opened questions with timestamps when possible.
 - **Communication tone**: precise, educator-friendly, and optimistic about mathematical exploration.
+- **Dialogue language**: 日本語で対話する。
 - **Dependencies**: confirm Python 3.12 + `uv` environment before suggesting code-level actions.
 - **Testing bias**: default to `pytest`; recommend scenario-based tests for parser/evaluator enhancements.
+- **言語対応**: 日本語。
 
 ## Typical Tasks
 - Draft README updates after specification changes.
