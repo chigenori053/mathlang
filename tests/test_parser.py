@@ -1,0 +1,56 @@
+import pytest
+
+from core import ast_nodes as ast
+from core.parser import Parser, ParserError
+
+
+def test_parse_sequential_statements():
+    source = """
+    a = 2
+    b = a + 3
+    show b
+    """
+    program = Parser(source).parse()
+    assert isinstance(program, ast.Program)
+    assert len(program.statements) == 3
+
+    assign_a = program.statements[0]
+    assert isinstance(assign_a, ast.Assignment)
+    assert assign_a.target == "a"
+    assert isinstance(assign_a.expression, ast.NumberLiteral)
+
+    assign_b = program.statements[1]
+    assert isinstance(assign_b, ast.Assignment)
+    expr = assign_b.expression
+    assert isinstance(expr, ast.BinaryOp)
+    assert isinstance(expr.left, ast.Identifier)
+    assert isinstance(expr.right, ast.NumberLiteral)
+
+    assert isinstance(program.statements[2], ast.Show)
+
+
+def test_operator_precedence_and_associativity():
+    source = "result = 2 + 3 * 4 ^ 2"
+    program = Parser(source).parse()
+    assignment = program.statements[0]
+    assert isinstance(assignment, ast.Assignment)
+    expr = assignment.expression
+
+    # Top level should be addition
+    assert isinstance(expr, ast.BinaryOp)
+    assert expr.operator == "+"
+
+    # Right branch should be multiplication
+    right = expr.right
+    assert isinstance(right, ast.BinaryOp)
+    assert right.operator == "*"
+
+    # Exponent should be nested on the right branch
+    exponent = right.right
+    assert isinstance(exponent, ast.BinaryOp)
+    assert exponent.operator == "^"
+
+
+def test_invalid_character_raises_error():
+    with pytest.raises(ParserError):
+        Parser("a = 2 $ 3").parse()
