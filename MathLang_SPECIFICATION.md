@@ -42,14 +42,17 @@ mathlang/
 │   ├── parser.py          # 構文解析器
 │   ├── evaluator.py       # 評価器（逐次評価）
 │   ├── ast_nodes.py       # 文法ノード定義
+│   ├── optimizer.py       # AST最適化パス
 │   └── symbolic_engine.py # SymbolicAI連携
 ├── examples/
-│   └── basic_math.mth     # サンプルスクリプト
+│   ├── pythagorean.mlang  # サンプルスクリプト
+│   └── run_example.py     # CLIデモヘルパー
 ├── docs/
 │   └── SPECIFICATION.md   # 開発仕様書
 ├── tests/
 │   ├── test_parser.py
 │   └── test_evaluator.py
+├── main.py                # CLIエントリポイント
 ├── pyproject.toml
 └── README.md
 ```
@@ -86,6 +89,18 @@ Step 3: c = a^2 + b^2 → 13
 Output: 13
 ```
 
+### 3. 実行方法（CLI）
+| 用途 | コマンド | 備考 |
+|------|----------|------|
+| ファイルを実行 | `python main.py examples/pythagorean.mlang` | Evaluatorステップ＋Output表示 |
+| インラインスニペット | `python main.py -c "a = 2\nb = 3\nshow a + b"` | 文字列に改行を含められる |
+| デモ再生 | `python examples/run_example.py` | `examples/`配下サンプルの簡易ランナー |
+| シンボリック分析 | `python main.py --symbolic "(a + b)^2 - (a^2 + 2ab + b^2)"` | SymPy必須。簡約結果・説明・構文木を表示 |
+| シンボリックトレース付き実行 | `python main.py --symbolic-trace examples/pythagorean.mlang` | DSL評価と同時に`show`出力へ簡約・説明・構文木を付与 |
+| Hello World自己診断 | `python main.py --hello-world-test` | CLIが正常ならHello WorldのStep/Outputが表示される |
+
+CLIはEvaluatorのログをそのままターミナルへ出力し、例外時は`[Parse Error]`または`[Evaluation Error]`で標準エラーに通知する。
+
 ---
 
 ## V. コンポーネント設計
@@ -118,6 +133,10 @@ class Evaluator:
 
     def step_eval(self):
         """1ステップごとに評価し、プロセスを出力"""
+        ...
+
+    def __init__(self, ast_root, symbolic_engine_factory=None):
+        """symbolic_engine_factory を与えると show 出力へシンボリック説明を付加"""
         ...
 ```
 
@@ -203,7 +222,19 @@ git push -u origin main
 
 ---
 
-## XI. 参考文献・理論的根拠
+## XI. リリースチェックリスト（ドラフト）
+
+- [ ] Parser/Evaluatorのテスト (`pytest`) が緑であること。
+- [ ] `main.py` のCLI仕様と `README.md`/本仕様書の手順が一致していること。
+- [ ] `examples/` 配下のスクリプト（`pythagorean.mlang` と `run_example.py`）がそのまま実行できること。
+- [ ] CLIの`--symbolic`モードが動作し、SymPy依存や出力仕様に変更があればREADME/仕様書へ反映すること。
+- [ ] CLIの`--symbolic-trace`モードが動作し、SymPy依存や出力仕様に変更があればREADME/仕様書へ反映すること。
+- [ ] CLIの`--hello-world-test`が想定どおりのStep/Outputを示すこと。
+- [ ] CLIやディレクトリ構造に変更があれば、同時に計画シートとリリースノート草案へ反映すること。
+
+---
+
+## XII. 参考文献・理論的根拠
 
 - Bruner, J. S. *The Process of Education* (1960)
 - Papert, S. *Mindstorms: Children, Computers, and Powerful Ideas* (1980)

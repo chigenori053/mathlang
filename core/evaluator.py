@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Generator, Iterable, List
+from typing import Callable, Dict, Generator, Iterable, List, Optional
 
 from . import ast_nodes as ast
+from .optimizer import clone_expression, optimize_expression
+from .symbolic_engine import SymbolicEngine, SymbolicEngineError
+
 
 
 class EvaluationError(RuntimeError):
@@ -21,10 +24,24 @@ class EvaluationResult:
 class Evaluator:
     """Evaluates a MathLang program while emitting human-friendly steps."""
 
-    def __init__(self, program: ast.Program):
+    def __init__(
+        self,
+        program: ast.Program,
+        symbolic_engine_factory: Optional[Callable[[], SymbolicEngine]] = None,
+    ):
         self.program = program
         self.context: Dict[str, float] = {}
+        self.expressions: Dict[str, ast.Expression] = {}
         self._step = 0
+        self._symbolic_engine_factory = symbolic_engine_factory
+        self._symbolic_engine: Optional[SymbolicEngine] = None
+        self._symbolic_error: Optional[str] = None
+
+        if symbolic_engine_factory is not None:
+            try:
+                self._symbolic_engine = symbolic_engine_factory()
+            except SymbolicEngineError as exc:
+                self._symbolic_error = str(exc)
 
     def run(self) -> List[EvaluationResult]:
         """Evaluate the full program and collect all steps."""
@@ -41,6 +58,7 @@ class Evaluator:
         if isinstance(statement, ast.Assignment):
             value = self._evaluate_expression(statement.expression)
             self.context[statement.target] = value
+            self.expressions[statement.target] = clone_expression(statement.expression)
             message = f"{statement.target} = {self._format_expression(statement.expression)} → {self._format_value(value)}"
             yield self._next_step(message)
             return
@@ -51,6 +69,7 @@ class Evaluator:
             value = self.context[statement.identifier]
             message = f"show {statement.identifier} → {self._format_value(value)}"
             yield self._next_step(message)
+            yield from self._symbolic_trace(statement.identifier)
             yield EvaluationResult(step_number=0, message=f"Output: {self._format_value(value)}")
             return
 
@@ -83,6 +102,8 @@ class Evaluator:
         if operator == "*":
             return left * right
         if operator == "/":
+            if right == 0:
+                raise EvaluationError("Division by zero")
             return left / right
         if operator == "^":
             return left**right
@@ -109,3 +130,37 @@ class Evaluator:
         if value.is_integer():
             return str(int(value))
         return f"{value:.6g}"
+
+    # Symbolic helpers ----------------------------------------------------------
+
+    def _symbolic_trace(self, identifier: str) -> Iterable[EvaluationResult]:
+        if self._symbolic_engine_factory is None:
+            return []
+
+        if self._symbolic_engine is None:
+            if self._symbolic_error is None:
+                return []
+            # 既にエラーが発生している場合は一度だけ通知
+            error_message = self._symbolic_error
+            # エラーメッセージが複数回出力されるのを防ぐ
+            self._symbolic_error = None
+            return [EvaluationResult(step_number=0, message=f"[Symbolic Disabled] {error_message}")]
+
+        expression = self.expressions.get(identifier)
+        if expression is None:
+            expression = ast.NumberLiteral(value=self.context[identifier])
+
+        optimized = optimize_expression(expression, self.expressions)
+        expression_str = self._format_expression(optimized)
+
+        try:
+            result = self._symbolic_engine.simplify(expression_str)
+            structure = self._symbolic_engine.explain(expression_str)
+        except SymbolicEngineError as exc:
+            return [EvaluationResult(step_number=0, message=f"[Symbolic Error] {exc}")]
+
+        return [
+            EvaluationResult(step_number=0, message=f"Symbolic: {result.simplified}"),
+            EvaluationResult(step_number=0, message=f"Explanation: {result.explanation}"),
+            EvaluationResult(step_number=0, message=f"Structure: {structure}"),
+        ]
