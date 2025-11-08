@@ -83,10 +83,10 @@ show c
 
 出力例：
 ```
-Step 1: a = 2
-Step 2: b = 3
-Step 3: c = a^2 + b^2 → 13
-Output: 13
+ステップ 1: a = 2
+ステップ 2: b = 3
+ステップ 3: c = a^2 + b^2 → 13
+出力: 13
 ```
 
 ### 3. 実行方法（CLI）
@@ -97,9 +97,10 @@ Output: 13
 | デモ再生 | `python examples/run_example.py` | `examples/`配下サンプルの簡易ランナー |
 | シンボリック分析 | `python main.py --symbolic "(a + b)^2 - (a^2 + 2ab + b^2)"` | SymPy必須。簡約結果・説明・構文木を表示 |
 | シンボリックトレース付き実行 | `python main.py --symbolic-trace examples/pythagorean.mlang` | DSL評価と同時に`show`出力へ簡約・説明・構文木を付与 |
-| Hello World自己診断 | `python main.py --hello-world-test` | CLIが正常ならHello WorldのStep/Outputが表示される |
+| Hello World自己診断 | `python main.py --hello-world-test` | CLIが正常ならHello Worldのステップ／出力が表示される |
+| 出力言語切替 | `python main.py --language en examples/pythagorean.mlang` | ログと`出力`表記を英語化（デフォルトは日本語） |
 
-CLIはEvaluatorのログをそのままターミナルへ出力し、例外時は`[Parse Error]`または`[Evaluation Error]`で標準エラーに通知する。
+CLIは選択した言語でEvaluatorのログをそのままターミナルへ出力し、例外時は`[Parse Error]`または`[Evaluation Error]`で標準エラーに通知する。
 
 ---
 
@@ -229,7 +230,8 @@ git push -u origin main
 - [ ] `examples/` 配下のスクリプト（`pythagorean.mlang` と `run_example.py`）がそのまま実行できること。
 - [ ] CLIの`--symbolic`モードが動作し、SymPy依存や出力仕様に変更があればREADME/仕様書へ反映すること。
 - [ ] CLIの`--symbolic-trace`モードが動作し、SymPy依存や出力仕様に変更があればREADME/仕様書へ反映すること。
-- [ ] CLIの`--hello-world-test`が想定どおりのStep/Outputを示すこと。
+- [ ] CLIの`--hello-world-test`が想定どおりのステップ／出力を示すこと。
+- [ ] CLIの`--language`がja/enを切り替え、ステップ／出力表記が対応すること。
 - [ ] CLIやディレクトリ構造に変更があれば、同時に計画シートとリリースノート草案へ反映すること。
 
 ---

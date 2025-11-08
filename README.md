@@ -30,10 +30,10 @@ show c
 ```
 Expected output:
 ```
-Step 1: a = 2
-Step 2: b = 3
-Step 3: c = a^2 + b^2 → 13
-Output: 13
+ステップ 1: a = 2
+ステップ 2: b = 3
+ステップ 3: c = a^2 + b^2 → 13
+出力: 13
 ```
 
 ## CLI Usage
@@ -43,8 +43,9 @@ Output: 13
 - Run a symbolic check (requires SymPy): `python main.py --symbolic "(a + b)^2 - (a^2 + 2ab + b^2)"`
 - Enable symbolic traces during program execution: `python main.py --symbolic-trace examples/pythagorean.mlang`
 - Run the built-in Hello World self-test: `python main.py --hello-world-test`
+- Switch output language (default: Japanese): `python main.py --language en -c "show 1 + 2"`
 
-The CLI prints each evaluator step plus the final `Output` marker, and symbolic mode reports simplified forms, explanations, and tree structures for the provided expression.
+The CLI prints each evaluator step (`ステップ N` / `Step N`) plus the final `出力` / `Output` marker in the language you choose, and symbolic mode reports simplified forms, explanations, and tree structures for the provided expression.
 
 ## Roadmap (Draft)
 1. **Phase 1** – Parser/Evaluator foundation (target: mid Nov 2025)
@@ -73,7 +74,8 @@ uv add sympy lark-parser jupyter pytest
 - [ ] Examples under `examples/` execute without modification (try `python examples/run_example.py`).
 - [ ] `--symbolic` flag works (prints simplify/explain output) or README/Spec are updated if the behavior changes.
 - [ ] `--symbolic-trace` flag prints symbolic/explanation/structure sections for `show` 出力（SymPy 導入済み環境）。
-- [ ] `--hello-world-test` prints the expected Hello World step/output trace.
+- [ ] `--hello-world-test` prints the expected Hello World ステップ／出力 trace.
+- [ ] `--language` flag switches between Japanese (default) and English labels for steps/output/logs.
 - [ ] Specification updated for any CLI or directory layout changes.
 
 For coordination guidelines, see `Agent.md`.

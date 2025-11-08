@@ -2,6 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from core.i18n import get_language_pack
 from core.symbolic_engine import SymbolicEngineError, SymbolicResult
 from main import _run_symbolic_mode
 
@@ -26,13 +27,13 @@ class DummyEngine:
 
 def test_symbolic_mode_outputs_analysis(capsys):
     engine = DummyEngine()
-    rc = _run_symbolic_mode("a + a", engine_factory=lambda: engine)
+    rc = _run_symbolic_mode("a + a", language=get_language_pack("ja"), engine_factory=lambda: engine)
 
     assert rc == 0
     captured = capsys.readouterr()
-    assert "Simplified: a+a" in captured.out
-    assert "Explanation: dummy explanation" in captured.out
-    assert "Structure: Dummy(a + a)" in captured.out
+    assert "簡約結果: a+a" in captured.out
+    assert "説明: dummy explanation" in captured.out
+    assert "構造: Dummy(a + a)" in captured.out
     assert engine.simplify_calls == 1
     assert engine.explain_calls == 1
 
@@ -40,6 +41,7 @@ def test_symbolic_mode_outputs_analysis(capsys):
 def test_symbolic_mode_handles_factory_error(capsys):
     rc = _run_symbolic_mode(
         "expr",
+        language=get_language_pack("ja"),
         engine_factory=lambda: (_ for _ in ()).throw(SymbolicEngineError("boom")),
     )
 
@@ -57,4 +59,17 @@ def test_cli_hello_world_self_test_runs_via_subprocess():
     )
 
     assert "Hello World" in result.stdout
-    assert "== MathLang Execution (hello-world self-test) ==" in result.stdout
+    assert "== MathLang 実行 (Hello World 自己診断) ==" in result.stdout
+
+
+def test_symbolic_mode_outputs_analysis_in_english(capsys):
+    engine = DummyEngine()
+    rc = _run_symbolic_mode("a + a", language=get_language_pack("en"), engine_factory=lambda: engine)
+
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "Simplified: a+a" in captured.out
+    assert "Explanation: dummy explanation" in captured.out
+    assert "Structure: Dummy(a + a)" in captured.out
+    assert engine.simplify_calls == 1
+    assert engine.explain_calls == 1

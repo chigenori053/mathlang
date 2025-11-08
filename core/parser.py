@@ -7,6 +7,7 @@ from enum import Enum, auto
 from typing import List, Sequence
 
 from . import ast_nodes as ast
+from .i18n import LanguagePack, get_language_pack
 
 
 class ParserError(ValueError):
@@ -44,12 +45,13 @@ class Token:
 class Lexer:
     """Turns the MathLang source code into a token stream."""
 
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, language: LanguagePack) -> None:
         self.source = source
         self.length = len(source)
         self.index = 0
         self.line = 1
         self.column = 1
+        self.language = language
 
     def tokenize(self) -> List[Token]:
         tokens: List[Token] = []
@@ -92,7 +94,11 @@ class Lexer:
                 self._advance()
                 continue
 
-            raise LexerError(f"Unexpected character '{ch}' at line {self.line}, column {self.column}")
+            raise LexerError(
+                self.language.text(
+                    "lexer.unexpected_character", char=ch, line=self.line, column=self.column
+                )
+            )
 
         tokens.append(self._make_token(TokenType.EOF, ""))
         return tokens
@@ -165,9 +171,10 @@ class Lexer:
 class Parser:
     """Turns MathLang source text into an AST program object."""
 
-    def __init__(self, source: str):
+    def __init__(self, source: str, language: LanguagePack | None = None):
+        self._language = language or get_language_pack()
         try:
-            self.tokens: Sequence[Token] = Lexer(source).tokenize()
+            self.tokens: Sequence[Token] = Lexer(source, self._language).tokenize()
         except LexerError as exc:
             raise ParserError(str(exc)) from exc
         self.position = 0
@@ -184,12 +191,18 @@ class Parser:
 
     def _parse_statement(self) -> ast.Statement:
         if self._match(TokenType.SHOW):
-            identifier = self._consume(TokenType.IDENT, "'show' の後には識別子が必要です")
+            identifier = self._consume(
+                TokenType.IDENT,
+                self._language.text("parser.show_identifier_required"),
+            )
             return ast.Show(identifier=identifier.lexeme)
 
         if self._check(TokenType.IDENT) and self._check_next(TokenType.EQUAL):
-            target = self._consume(TokenType.IDENT, "代入の先頭には識別子が必要です")
-            self._consume(TokenType.EQUAL, "代入には '=' が必要です")
+            target = self._consume(
+                TokenType.IDENT,
+                self._language.text("parser.assignment_identifier_required"),
+            )
+            self._consume(TokenType.EQUAL, self._language.text("parser.assignment_equal_missing"))
             expression = self._parse_expression()
             return ast.Assignment(target=target.lexeme, expression=expression)
 
@@ -240,11 +253,11 @@ class Parser:
             return ast.Identifier(name=self._previous().lexeme)
         if self._match(TokenType.LPAREN):
             expr = self._parse_expression()
-            self._consume(TokenType.RPAREN, "括弧を閉じる ')' が必要です")
+            self._consume(TokenType.RPAREN, self._language.text("parser.closing_paren_missing"))
             return expr
         token = self._peek()
         raise ParserError(
-            f"Unexpected token '{token.lexeme}' at line {token.line}, column {token.column}"
+            self._language.text("parser.unexpected_token", lexeme=token.lexeme, line=token.line, column=token.column)
         )
 
     def _consume_newlines(self) -> None:
