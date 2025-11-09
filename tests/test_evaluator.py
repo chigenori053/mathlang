@@ -2,6 +2,7 @@ import pytest
 
 from core.evaluator import EvaluationError, Evaluator
 from core.i18n import get_language_pack
+from core.logging import LearningLogger
 from core.parser import Parser
 from core.symbolic_engine import SymbolicEngineError, SymbolicResult
 
@@ -137,3 +138,91 @@ def test_language_switches_to_english_output():
     messages = [result.message for result in results]
     assert messages[3] == "show c → 5"
     assert messages[-1] == "Output: 5"
+
+
+def test_core_dsl_constant_sequence_verifies():
+    source = """
+    problem: (2^2) + (3^2)
+    step: 4 + 9
+    end: 13
+    """
+    language = get_language_pack("en")
+    program = Parser(source, language=language).parse()
+    evaluator = Evaluator(program, language=language)
+    messages = [result.message for result in evaluator.run()]
+
+    assert messages[0].startswith("[problem]")
+    assert "(equivalence: OK)" in messages[1]
+    assert messages[2].startswith("[end] 13")
+
+
+def test_core_dsl_symbolic_equivalence():
+    source = """
+    problem: (a + b)^2
+    step: a^2 + 2*a*b + b^2
+    end: done
+    """
+    language = get_language_pack("en")
+    program = Parser(source, language=language).parse()
+    evaluator = Evaluator(program, language=language)
+
+    messages = [result.message for result in evaluator.run()]
+    assert any("[step1]" in message and "(equivalence: OK)" in message for message in messages)
+    assert messages[-1] == "[end] done"
+
+
+def test_core_dsl_logs_knowledge_rule_when_available():
+    source = """
+    problem: x + 1 + x + 2
+    step: 2*x + 3
+    end: done
+    """
+    language = get_language_pack("en")
+    program = Parser(source, language=language).parse()
+    evaluator = Evaluator(program, language=language)
+    messages = [result.message for result in evaluator.run()]
+
+    assert any("ARITH-ADD-001" in message for message in messages)
+
+
+def test_core_dsl_invalid_step_raises():
+    source = """
+    problem: 2 + 2
+    step: 5
+    """
+    language = get_language_pack("en")
+    program = Parser(source, language=language).parse()
+    evaluator = Evaluator(program, language=language)
+
+    with pytest.raises(EvaluationError, match="not equivalent"):
+        list(evaluator.step_eval())
+
+
+def test_core_dsl_step_requires_problem():
+    source = """
+    step: 3
+    """
+    language = get_language_pack("en")
+    program = Parser(source, language=language).parse()
+    evaluator = Evaluator(program, language=language)
+
+    with pytest.raises(EvaluationError, match="problem"):
+        list(evaluator.step_eval())
+
+
+def test_learning_logger_collects_problem_step_end():
+    source = """
+    problem: (2 + 3) * 4
+    step: 5 * 4
+    end: 20
+    """
+    logger = LearningLogger()
+    program = Parser(source).parse()
+    evaluator = Evaluator(program, learning_logger=logger)
+    evaluator.run()
+
+    entries = logger.to_dict()
+    phases = [entry["phase"] for entry in entries]
+    assert phases[0] == "problem"
+    assert "step" in phases
+    assert phases[-1] == "end"

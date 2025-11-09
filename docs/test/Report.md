@@ -86,7 +86,7 @@
 
 ### 結果概要
 
-- `pytest` 実行で 21 件すべて成功（Evaluator シンボリック統合・Optimizer を含む）。
+- `pytest` 実行で 29 件すべて成功（Polynomial Evaluator/CLI を含む）。
 - 以前の `ModuleNotFoundError: core` は、`core/` をリポジトリ直下へ配置し `pyproject.toml` に `pythonpath = ["."]` を追加することで解消。
 
 ### 詳細
@@ -95,15 +95,16 @@
    - **実行時刻**: 2025-11-08 再実行
    - **ステータス**: 成功
    - **ログ抜粋**:
-     - `collected 21 items`
-     - `tests/test_cli.py ...`
-     - `tests/test_evaluator.py .......`
+     - `collected 29 items`
+     - `tests/test_cli.py ....`
+     - `tests/test_evaluator.py ........`
      - `tests/test_optimizer.py ...`
      - `tests/test_parser.py .....`
+     - `tests/test_polynomial.py ......`
      - `tests/test_symbolic_engine.py ...`
-     - `21 passed in 0.06s`
+     - `29 passed in 0.07s`
    - **考察**:
-     - シンボリック統合に伴い CLI/Evaluator/Optimizer の新規テストが増加。引き続き `PYTHONPATH` 設定で `core` パッケージが解決されている。
+     - 多項式評価機能の追加により CLI/Evaluator/Optimizer/Polynomial の新規テストを含む 29 ケースが成功。引き続き `PYTHONPATH` 設定で `core` パッケージが解決されている。
 
 ### 次のアクション
 

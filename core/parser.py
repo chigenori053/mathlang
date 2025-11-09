@@ -21,13 +21,23 @@ class LexerError(ValueError):
 class TokenType(Enum):
     IDENT = auto()
     NUMBER = auto()
+    STRING = auto()
     SHOW = auto()
+    PROBLEM = auto()
+    STEP = auto()
+    STEP_LABEL = auto()
+    END = auto()
+    EXPLAIN = auto()
+    DONE = auto()
     PLUS = auto()
     MINUS = auto()
     STAR = auto()
     SLASH = auto()
     CARET = auto()
     EQUAL = auto()
+    COLON = auto()
+    LBRACKET = auto()
+    RBRACKET = auto()
     LPAREN = auto()
     RPAREN = auto()
     NEWLINE = auto()
@@ -71,6 +81,10 @@ class Lexer:
                 self._consume_newline()
                 continue
 
+            if ch in "\"'":
+                tokens.append(self._string(ch))
+                continue
+
             if ch.isdigit():
                 tokens.append(self._number())
                 continue
@@ -86,6 +100,9 @@ class Lexer:
                 "/": TokenType.SLASH,
                 "^": TokenType.CARET,
                 "=": TokenType.EQUAL,
+                ":": TokenType.COLON,
+                "[": TokenType.LBRACKET,
+                "]": TokenType.RBRACKET,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
             }
@@ -138,6 +155,29 @@ class Lexer:
         while not self._is_at_end() and self._peek() not in "\r\n":
             self._advance()
 
+    def _string(self, quote: str) -> Token:
+        start_line, start_column = self.line, self.column
+        self._advance()  # consume opening quote
+        lexeme_chars = []
+
+        while not self._is_at_end():
+            ch = self._peek()
+            if ch == quote:
+                self._advance()
+                lexeme = "".join(lexeme_chars)
+                return Token(TokenType.STRING, lexeme, start_line, start_column)
+            if ch == "\n":
+                break
+            lexeme_chars.append(self._advance())
+
+        raise LexerError(
+            self.language.text(
+                "lexer.unterminated_string",
+                line=start_line,
+                column=start_column,
+            )
+        )
+
     def _number(self) -> Token:
         start_line, start_column = self.line, self.column
         lexeme_chars = []
@@ -164,7 +204,19 @@ class Lexer:
             lexeme_chars.append(self._advance())
 
         lexeme = "".join(lexeme_chars)
-        token_type = TokenType.SHOW if lexeme == "show" else TokenType.IDENT
+        keyword_tokens = {
+            "show": TokenType.SHOW,
+            "problem": TokenType.PROBLEM,
+            "step": TokenType.STEP,
+            "end": TokenType.END,
+            "explain": TokenType.EXPLAIN,
+            "done": TokenType.DONE,
+        }
+        token_type = keyword_tokens.get(lexeme, TokenType.IDENT)
+        if token_type is TokenType.IDENT and lexeme.startswith("step"):
+            suffix = lexeme[4:]
+            if suffix.isdigit():
+                token_type = TokenType.STEP_LABEL
         return Token(token_type, lexeme, start_line, start_column)
 
 
@@ -190,6 +242,22 @@ class Parser:
         return ast.Program(statements=statements)
 
     def _parse_statement(self) -> ast.Statement:
+        if self._match(TokenType.PROBLEM):
+            return self._parse_problem()
+
+        if self._match(TokenType.STEP):
+            return self._parse_step()
+
+        if self._check(TokenType.STEP_LABEL) and self._check_next(TokenType.COLON):
+            label_token = self._advance()
+            return self._parse_step(prefixed_label=label_token.lexeme)
+
+        if self._match(TokenType.END):
+            return self._parse_end()
+
+        if self._match(TokenType.EXPLAIN):
+            return self._parse_explain()
+
         if self._match(TokenType.SHOW):
             identifier = self._consume(
                 TokenType.IDENT,
@@ -208,6 +276,38 @@ class Parser:
 
         expression = self._parse_expression()
         return ast.ExpressionStatement(expression=expression)
+
+    def _parse_problem(self) -> ast.Statement:
+        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="problem"))
+        expression = self._parse_expression()
+        return ast.Problem(expression=expression)
+
+    def _parse_step(self, prefixed_label: str | None = None) -> ast.Statement:
+        label = prefixed_label or self._parse_step_bracket_label()
+        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="step"))
+        expression = self._parse_expression()
+        return ast.Step(expression=expression, label=label)
+
+    def _parse_step_bracket_label(self) -> str | None:
+        if not self._match(TokenType.LBRACKET):
+            return None
+        if not (self._check(TokenType.IDENT) or self._check(TokenType.NUMBER)):
+            raise ParserError(self._language.text("parser.step_id_required"))
+        label_token = self._advance()
+        self._consume(TokenType.RBRACKET, self._language.text("parser.step_bracket_close_missing"))
+        return f"step[{label_token.lexeme}]"
+
+    def _parse_end(self) -> ast.Statement:
+        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="end"))
+        if self._match(TokenType.DONE):
+            return ast.End(expression=None, done=True)
+        expression = self._parse_expression()
+        return ast.End(expression=expression, done=False)
+
+    def _parse_explain(self) -> ast.Statement:
+        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="explain"))
+        string_token = self._consume(TokenType.STRING, self._language.text("parser.explain_string_required"))
+        return ast.Explain(message=string_token.lexeme)
 
     def _parse_expression(self) -> ast.Expression:
         return self._parse_additive()

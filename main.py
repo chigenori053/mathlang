@@ -11,6 +11,7 @@ from typing import Callable
 from core.evaluator import EvaluationError, Evaluator
 from core.i18n import LanguagePack, available_languages, get_language_pack
 from core.parser import Parser, ParserError
+from core.polynomial_evaluator import PolynomialEvaluationError, PolynomialEvaluator
 from core.symbolic_engine import SymbolicEngine, SymbolicEngineError
 
 
@@ -35,6 +36,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--symbolic-trace",
         action="store_true",
         help=get_language_pack().text("cli.symbolic_trace_help"),
+    )
+    parser.add_argument(
+        "--polynomial",
+        action="store_true",
+        help=get_language_pack().text("cli.polynomial_help"),
     )
     parser.add_argument(
         "--hello-world-test",
@@ -62,6 +68,15 @@ def _load_source(args: argparse.Namespace, language: LanguagePack) -> tuple[str,
 
 
 def _render_results(evaluator: Evaluator, language: LanguagePack) -> None:
+    step_label = language.text("cli.step_label")
+    for result in evaluator.run():
+        if result.step_number:
+            print(f"{step_label} {result.step_number}: {result.message}")
+        else:
+            print(result.message)
+
+
+def _render_polynomial_results(evaluator: PolynomialEvaluator, language: LanguagePack) -> None:
     step_label = language.text("cli.step_label")
     for result in evaluator.run():
         if result.step_number:
@@ -104,6 +119,26 @@ def _run_symbolic_mode(
     return 0
 
 
+def _run_polynomial_mode(expression: str, language: LanguagePack) -> int:
+    synthetic_source = f"result = {expression}\nshow result\n"
+    try:
+        program = Parser(synthetic_source, language=language).parse()
+    except ParserError as exc:
+        print(language.text("cli.polynomial_parse_error", error=exc), file=sys.stderr)
+        return 1
+
+    evaluator = PolynomialEvaluator(program)
+    print(language.text("cli.heading_polynomial"))
+    print(language.text("cli.polynomial_input", expression=expression))
+
+    try:
+        _render_polynomial_results(evaluator, language)
+    except PolynomialEvaluationError as exc:
+        print(language.text("cli.polynomial_error", error=exc), file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = _build_arg_parser()
     args = parser.parse_args()
@@ -116,11 +151,41 @@ def main() -> int:
             parser.error(language.text("cli.symbolic_conflict_trace"))
         return _run_symbolic_mode(args.symbolic, language)
 
+    if args.polynomial:
+        if args.symbolic_trace:
+            parser.error(language.text("cli.polynomial_conflict_trace"))
+        
+        try:
+            source, label = _load_source(args, language)
+        except ValueError as exc:
+            parser.error(str(exc))
+        except FileNotFoundError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        try:
+            program = Parser(source, language=language).parse()
+        except ParserError as exc:
+            print(f"[Parse Error] {exc}", file=sys.stderr)
+            return 1
+
+        evaluator = PolynomialEvaluator(program)
+        print(language.text("cli.heading_execution", label=label))
+        try:
+            _render_polynomial_results(evaluator, language)
+        except PolynomialEvaluationError as exc:
+            print(f"[Polynomial Error] {exc}", file=sys.stderr)
+            return 1
+        return 0
+
+
     if args.hello_world_test:
         if args.script or args.code:
             parser.error(language.text("cli.hello_conflict_script"))
         if args.symbolic:
             parser.error(language.text("cli.hello_conflict_symbolic"))
+        if args.polynomial:
+            parser.error(language.text("cli.hello_conflict_polynomial"))
         return _run_hello_world_test(language)
 
     try:

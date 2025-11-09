@@ -39,68 +39,91 @@
 ```
 mathlang/
 ├── core/
-│   ├── parser.py          # 構文解析器
-│   ├── evaluator.py       # 評価器（逐次評価）
-│   ├── ast_nodes.py       # 文法ノード定義
-│   ├── optimizer.py       # AST最適化パス
-│   └── symbolic_engine.py # SymbolicAI連携
+│   ├── parser.py               # 構文解析器
+│   ├── evaluator.py            # 評価器（逐次評価）
+│   ├── polynomial.py           # 多項式データ構造と演算
+│   ├── polynomial_evaluator.py # 多項式評価器
+│   ├── ast_nodes.py            # 文法ノード定義
+│   ├── optimizer.py            # AST最適化パス
+│   ├── symbolic_engine.py      # SymbolicAI連携
+│   └── knowledge/              # カテゴリ別知識ノード（docs/knowledge_nodes_spec.md）
+│       └── arithmetic/
+│           ├── addition.json
+│           ├── subtraction.json
+│           ├── multiplication.json
+│           └── division.json
 ├── examples/
-│   ├── pythagorean.mlang  # サンプルスクリプト
-│   └── run_example.py     # CLIデモヘルパー
+│   ├── pythagorean.mlang       # サンプルスクリプト
+│   └── run_example.py          # CLIデモヘルパー
 ├── docs/
-│   └── SPECIFICATION.md   # 開発仕様書
+│   └── SPECIFICATION.md        # 開発仕様書
+├── notebooks/
+│   └── Learning_Log_Demo.ipynb   # Jupyterサンプル（LearningLoggerデモ）
 ├── tests/
 │   ├── test_parser.py
-│   └── test_evaluator.py
-├── main.py                # CLIエントリポイント
+│   ├── test_evaluator.py
+│   ├── test_cli.py
+│   ├── test_symbolic_engine.py
+│   └── test_polynomial.py
+├── main.py                     # CLIエントリポイント
 ├── pyproject.toml
 └── README.md
 ```
 
 ---
 
-## IV. 言語仕様（MathLang DSL）
+## IV. 言語仕様（MathLang Core DSL v1）
+
+> 詳細仕様は `MathLang_Core_DSL_v1_spec.md` を参照。ここでは開発仕様書向けに要点をまとめる。
 
 ### 1. 文法概要
 ```bnf
-<program>    ::= <statement>+
-<statement>  ::= <assign> | <expression> | <explain>
-<assign>     ::= <identifier> "=" <expression>
-<expression> ::= <term> | <term> <operator> <term>
-<explain>    ::= "show" <identifier>
-<term>       ::= <number> | <identifier> | "(" <expression> ")"
-<operator>   ::= "+" | "-" | "*" | "/" | "^"
+Program      ::= (Statement NEWLINE)*
+Statement    ::= ProblemDecl | StepDecl | EndDecl | ExplainDecl
+ProblemDecl  ::= "problem" ":" Expr
+StepDecl     ::= "step" ("[" StepId "]")? ":" Expr
+EndDecl      ::= "end" ":" (Expr | "done")
+ExplainDecl  ::= "explain" ":" STRING
+Expr         ::= 四則演算・括弧・変数・関数式などの数式表現
+StepId       ::= 1..n を示す識別子（任意）
 ```
 
-### 2. サンプルコード
+### 2. コア構文と意味
+| 構文 | 役割 | 内部API連携 |
+|------|------|-------------|
+| `problem: <expr>` | 初期式の宣言。AST生成と初期状態の保存。 | `Engine.set(expr)` |
+| `step[:|<id>] <expr>` | 中間計算の提示と同値性検証。 | `Engine.check_step(expr)` |
+| `end: <expr|done>` | 最終結果の検証と完了ログ出力。 | `Engine.finalize(expr)` |
+| `explain: "..."` | 変形理由などの教育メタ情報。 | ステップログへ注釈を付与 |
+
+### 3. 記述例
 ```mathlang
-# MathLang Example: Stepwise Computation
-a = 2
-b = 3
-c = a^2 + b^2
-show c
+problem: (3 + 5) * (2 + 1)
+step1: 8 * (2 + 1)
+step2: 8 * 3
+end: 24
 ```
 
-出力例：
+ステップ実行時のログイメージ：
 ```
-ステップ 1: a = 2
-ステップ 2: b = 3
-ステップ 3: c = a^2 + b^2 → 13
-出力: 13
+[problem] (3 + 5) * (2 + 1)
+[step1]  8 * (2 + 1)   # addition
+[step2]  8 * 3         # multiplication
+[end]    24            # done
 ```
 
-### 3. 実行方法（CLI）
-| 用途 | コマンド | 備考 |
-|------|----------|------|
-| ファイルを実行 | `python main.py examples/pythagorean.mlang` | Evaluatorステップ＋Output表示 |
-| インラインスニペット | `python main.py -c "a = 2\nb = 3\nshow a + b"` | 文字列に改行を含められる |
-| デモ再生 | `python examples/run_example.py` | `examples/`配下サンプルの簡易ランナー |
-| シンボリック分析 | `python main.py --symbolic "(a + b)^2 - (a^2 + 2ab + b^2)"` | SymPy必須。簡約結果・説明・構文木を表示 |
-| シンボリックトレース付き実行 | `python main.py --symbolic-trace examples/pythagorean.mlang` | DSL評価と同時に`show`出力へ簡約・説明・構文木を付与 |
-| Hello World自己診断 | `python main.py --hello-world-test` | CLIが正常ならHello Worldのステップ／出力が表示される |
-| 出力言語切替 | `python main.py --language en examples/pythagorean.mlang` | ログと`出力`表記を英語化（デフォルトは日本語） |
+### 4. エラーとバリデーション方針
+- `SyntaxError`：構文解析に失敗した場合。  
+- `MissingProblemError`：`problem` 前に `step` / `end` が現れた場合。  
+- `InvalidStepError`：`step` が直前式と同値でない場合。  
+- `InconsistentEndError`：`end` が最後の `step` と一致しない場合。
 
-CLIは選択した言語でEvaluatorのログをそのままターミナルへ出力し、例外時は`[Parse Error]`または`[Evaluation Error]`で標準エラーに通知する。
+Evaluatorは各`step`でAST比較・SymbolicAIによる同値性判定を実施し、成功したステップのみが履歴へ記録される。
+
+### 5. 実装・CLIノート
+- CLIは `problem → step* → end` の順序を強制し、途中式ログと検証結果を逐次表示する。  
+- `--symbolic` 系オプションは `explain` や `ai_step` 拡張（v1では予約語）と連携予定。  
+- `examples/*.mlang` はCore DSL v1フォーマットで順次更新する。
 
 ---
 
@@ -111,13 +134,19 @@ CLIは選択した言語でEvaluatorのログをそのままターミナルへ�
 ```python
 class Parser:
     """
-    数学的表現をASTに変換する構文解析クラス
+    Core DSL (problem / step / end / explain) をASTへ変換する構文解析器。
+    行指向の入力を読み取り、ProgramNode配下に ProblemNode → StepNode* → EndNode を構築する。
     """
     def __init__(self, source: str):
-        self.source = source
+        self.lines = source.splitlines()
 
-    def parse(self) -> ASTNode:
-        """トークン列を解析しASTを生成"""
+    def parse(self) -> ProgramNode:
+        """
+        1. problem宣言を検出し ProblemNode を生成。
+        2. 連続する step/step[n] を StepNode として格納（省略可）。
+        3. end節と任意の explain節を EndNode/ExplainNode としてまとめる。
+        構文違反時は SyntaxError を送出。
+        """
         ...
 ```
 
@@ -126,22 +155,44 @@ class Parser:
 ```python
 class Evaluator:
     """
-    ASTを逐次評価し、思考過程を可視化
+    Parserが生成した ProgramNode を逐次評価し、
+    Engine(set/check_step/finalize) と連携して同値性検証ログを生成する。
     """
-    def __init__(self, ast_root):
-        self.context = {}
-        self.ast_root = ast_root
+    def __init__(self, program_ast, engine: Engine, *, explain_hook=None):
+        self.program_ast = program_ast
+        self.engine = engine
+        self.explain_hook = explain_hook  # explain節やSymbolicAI注釈の統合ポイント
 
-    def step_eval(self):
-        """1ステップごとに評価し、プロセスを出力"""
+    def run(self):
+        """problem → step* → end の順に各ノードを処理し、検証結果とメタ情報を返す。"""
         ...
 
-    def __init__(self, ast_root, symbolic_engine_factory=None):
-        """symbolic_engine_factory を与えると show 出力へシンボリック説明を付加"""
+    def _handle_step(self, step_node):
+        """
+        Engine.check_step を呼び出し、同値でなければ InvalidStepError を発生。
+        explain_hook があればステップログへ理由を添付する。
+        """
         ...
 ```
 
-### 3. SymbolicEngineクラス設計（SymbolicAI連携）
+### 3. PolynomialEvaluatorクラス設計
+
+```python
+class PolynomialEvaluator:
+    """
+    Core DSLで与えられた problem/step/end を多項式領域で評価。
+    各 step の式を正規形に還元し、前ステップとの差分（展開・整理規則）を検証する。
+    """
+    def __init__(self, program_ast, *, normalizer):
+        self.program_ast = program_ast
+        self.normalizer = normalizer  # 交換律/結合法則/分配法則を適用する正規化関数
+
+    def run(self):
+        """Evaluator同様のフローで、stepごとの正規化結果と差分をログに蓄積する。"""
+        ...
+```
+
+### 4. SymbolicEngineクラス設計（SymbolicAI連携）
 
 ```python
 class SymbolicEngine:
@@ -155,6 +206,28 @@ class SymbolicEngine:
         """思考的説明生成"""
         ...
 ```
+
+### 5. KnowledgeRegistry/KnowledgeNode設計
+
+> 詳細スキーマは `docs/knowledge_nodes_spec.md` を参照。
+
+```python
+class KnowledgeRegistry:
+    """
+    core/knowledge/<domain>/<category>.json をロードし、
+    Evaluatorが problem/step/end の変形を照合できるようにする。
+    """
+    def __init__(self, base_path: Path):
+        self.nodes = self._load_all()
+
+    def match(self, before: str, after: str) -> KnowledgeNode | None:
+        """式テンプレートとカテゴリから候補ルールを返す。"""
+        ...
+```
+
+- **カテゴリ分割**：四則演算ごとにファイルを分割（`arithmetic/addition.yaml` など）し、必要に応じて `advanced/exponent.yaml` などを追加する。  
+- **ルールID**：`<DOMAIN>-<CATEGORY>-<連番>`（例: `ARITH-ADD-001`）。  
+- **Evaluator連携**：Core DSLステップのスナップショットを KnowledgeRegistry に照会し、同値検証ログへルールID/説明を付与する。
 
 ---
 
@@ -242,3 +315,20 @@ git push -u origin main
 - Papert, S. *Mindstorms: Children, Computers, and Powerful Ideas* (1980)
 - Larkin, J. & Simon, H. *Why a Diagram is (Sometimes) Worth Ten Thousand Words* (1987)
 - 日本教育工学会: 「数理的思考過程の可視化研究」(2021)
+-### 6. LearningLogger設計
+
+```python
+class LearningLogger:
+    """
+    Evaluator/PolynomialEvaluatorから呼ばれ、stepごとの記録をJSONとして蓄積する。
+    """
+    def record(self, *, phase: str, expression: str, rendered: str, status: str, rule_id: str | None = None):
+        ...
+
+    def to_dict(self) -> list[dict[str, Any]]:
+        ...
+    def write(self, path: Path): ...
+```
+
+- `Evaluator` / `PolynomialEvaluator` コンストラクタに `learning_logger` を渡すと、`problem`, `step`, `end`, `explain`, `show`, `assignment` など各イベントを `LearningLogger` が受け取り、`rule_id`（知識ノードID）や `status`（同値判定、info等）を含むJSONとして保持する。  
+- Jupyterデモは `notebooks/Learning_Log_Demo.ipynb` に配置し、Core DSL スニペルを走らせながらログを可視化する。

@@ -48,7 +48,29 @@ class ExpressionStatement:
     expression: Expression
 
 
-Statement = Union[Assignment, Show, ExpressionStatement]
+@dataclass
+class Problem:
+    expression: Expression
+
+
+@dataclass
+class Step:
+    expression: Expression
+    label: str | None = None
+
+
+@dataclass
+class End:
+    expression: Expression | None
+    done: bool = False
+
+
+@dataclass
+class Explain:
+    message: str
+
+
+Statement = Union[Assignment, Show, ExpressionStatement, Problem, Step, End, Explain]
 
 
 @dataclass

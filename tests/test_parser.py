@@ -72,3 +72,33 @@ def test_comments_and_blank_lines_are_ignored():
 def test_show_requires_identifier():
     with pytest.raises(ParserError):
         Parser("show\n").parse()
+
+
+def test_core_dsl_statements_are_parsed():
+    source = """
+    problem: (2 + 3)
+    step1: 5
+    step[hint]: 5
+    explain: "addition"
+    end: done
+    """
+    program = Parser(source).parse()
+    assert len(program.statements) == 5
+
+    assert isinstance(program.statements[0], ast.Problem)
+
+    step1 = program.statements[1]
+    assert isinstance(step1, ast.Step)
+    assert step1.label == "step1"
+
+    step_hint = program.statements[2]
+    assert isinstance(step_hint, ast.Step)
+    assert step_hint.label == "step[hint]"
+
+    explain = program.statements[3]
+    assert isinstance(explain, ast.Explain)
+    assert explain.message == "addition"
+
+    end = program.statements[4]
+    assert isinstance(end, ast.End)
+    assert end.done is True
