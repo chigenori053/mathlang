@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ARITH-MUL-001",
+    "category": "arithmetic.multiplication",
+    "title": "Difference of squares expansion",
+    "pattern": {
+      "before": "x * x - x * y + y * x - y * y",
+      "after": "x ^ 2 - y ^ 2"
+    },
+    "explanation": "分配法則を適用して (x + y)(x - y) の展開形を正規化する。"
+  }
+]

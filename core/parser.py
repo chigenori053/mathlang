@@ -309,48 +309,65 @@ class Parser:
         string_token = self._consume(TokenType.STRING, self._language.text("parser.explain_string_required"))
         return ast.Explain(message=string_token.lexeme)
 
-    def _parse_expression(self) -> ast.Expression:
+    def _parse_expression(self) -> ast.Expr:
         return self._parse_additive()
 
-    def _parse_additive(self) -> ast.Expression:
-        expr = self._parse_multiplicative()
+    def _parse_additive(self) -> ast.Expr:
+        terms = [self._parse_multiplicative()]
         while self._match(TokenType.PLUS, TokenType.MINUS):
             operator = self._previous().lexeme
             right = self._parse_multiplicative()
-            expr = ast.BinaryOp(left=expr, operator=operator, right=right)
-        return expr
+            if operator == "-":
+                terms.append(ast.Neg(expr=right))
+            else:
+                terms.append(right)
+        
+        if len(terms) == 1:
+            return terms[0]
+        return ast.Add(terms=terms)
 
-    def _parse_multiplicative(self) -> ast.Expression:
-        expr = self._parse_exponent()
+    def _parse_multiplicative(self) -> ast.Expr:
+        factors = [self._parse_exponent()]
         while self._match(TokenType.STAR, TokenType.SLASH):
             operator = self._previous().lexeme
             right = self._parse_exponent()
-            expr = ast.BinaryOp(left=expr, operator=operator, right=right)
-        return expr
+            if operator == "/":
+                # Represent division as multiplication by the reciprocal
+                factors.append(ast.Pow(base=right, exp=ast.Int(value=-1)))
+            else:
+                factors.append(right)
 
-    def _parse_exponent(self) -> ast.Expression:
+        if len(factors) == 1:
+            return factors[0]
+        return ast.Mul(factors=factors)
+
+    def _parse_exponent(self) -> ast.Expr:
         expr = self._parse_unary()
         if self._match(TokenType.CARET):
-            operator = self._previous().lexeme
             right = self._parse_exponent()
-            expr = ast.BinaryOp(left=expr, operator=operator, right=right)
+            expr = ast.Pow(base=expr, exp=right)
         return expr
 
-    def _parse_unary(self) -> ast.Expression:
+    def _parse_unary(self) -> ast.Expr:
         if self._match(TokenType.PLUS):
             return self._parse_unary()
         if self._match(TokenType.MINUS):
             right = self._parse_unary()
-            zero = ast.NumberLiteral(value=0.0)
-            return ast.BinaryOp(left=zero, operator="-", right=right)
+            return ast.Neg(expr=right)
         return self._parse_primary()
 
-    def _parse_primary(self) -> ast.Expression:
+    def _parse_primary(self) -> ast.Expr:
         if self._match(TokenType.NUMBER):
-            value = float(self._previous().lexeme)
-            return ast.NumberLiteral(value=value)
+            value_str = self._previous().lexeme
+            if "." in value_str:
+                # Not supporting floats in the new AST directly, parsing as int for now.
+                # This should be handled as Rat or with a dedicated Float node if needed.
+                value = int(float(value_str))
+            else:
+                value = int(value_str)
+            return ast.Int(value=value)
         if self._match(TokenType.IDENT):
-            return ast.Identifier(name=self._previous().lexeme)
+            return ast.Sym(name=self._previous().lexeme)
         if self._match(TokenType.LPAREN):
             expr = self._parse_expression()
             self._consume(TokenType.RPAREN, self._language.text("parser.closing_paren_missing"))

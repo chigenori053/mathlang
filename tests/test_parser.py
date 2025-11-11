@@ -17,14 +17,17 @@ def test_parse_sequential_statements():
     assign_a = program.statements[0]
     assert isinstance(assign_a, ast.Assignment)
     assert assign_a.target == "a"
-    assert isinstance(assign_a.expression, ast.NumberLiteral)
+    assert isinstance(assign_a.expression, ast.Int)
+    assert assign_a.expression.value == 2
 
     assign_b = program.statements[1]
     assert isinstance(assign_b, ast.Assignment)
     expr = assign_b.expression
-    assert isinstance(expr, ast.BinaryOp)
-    assert isinstance(expr.left, ast.Identifier)
-    assert isinstance(expr.right, ast.NumberLiteral)
+    assert isinstance(expr, ast.Add)
+    assert isinstance(expr.terms[0], ast.Sym)
+    assert expr.terms[0].name == "a"
+    assert isinstance(expr.terms[1], ast.Int)
+    assert expr.terms[1].value == 3
 
     assert isinstance(program.statements[2], ast.Show)
 
@@ -37,18 +40,23 @@ def test_operator_precedence_and_associativity():
     expr = assignment.expression
 
     # Top level should be addition
-    assert isinstance(expr, ast.BinaryOp)
-    assert expr.operator == "+"
+    assert isinstance(expr, ast.Add)
+    assert isinstance(expr.terms[0], ast.Int)
+    assert expr.terms[0].value == 2
 
     # Right branch should be multiplication
-    right = expr.right
-    assert isinstance(right, ast.BinaryOp)
-    assert right.operator == "*"
+    right = expr.terms[1]
+    assert isinstance(right, ast.Mul)
+    assert isinstance(right.factors[0], ast.Int)
+    assert right.factors[0].value == 3
 
     # Exponent should be nested on the right branch
-    exponent = right.right
-    assert isinstance(exponent, ast.BinaryOp)
-    assert exponent.operator == "^"
+    exponent = right.factors[1]
+    assert isinstance(exponent, ast.Pow)
+    assert isinstance(exponent.base, ast.Int)
+    assert exponent.base.value == 4
+    assert isinstance(exponent.exp, ast.Int)
+    assert exponent.exp.value == 2
 
 
 def test_invalid_character_raises_error():

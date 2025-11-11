@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ARITH-ADD-001",
+    "category": "arithmetic.addition",
+    "title": "Combine like terms (x + constants)",
+    "pattern": {
+      "before": "x + 1 + x + 2",
+      "after": "2 * x + 3"
+    },
+    "explanation": "同じ変数xの項をまとめ、定数を合算する。"
+  }
+]
