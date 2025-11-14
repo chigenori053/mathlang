@@ -43,7 +43,7 @@ def main(argv: List[str] | None = None) -> int:
             learning_logger=learning_logger,
         )
 
-        for result in evaluator.step_eval():
+        for result in evaluator.run():
             print(result.message)
 
         if learning_logger and args.log:

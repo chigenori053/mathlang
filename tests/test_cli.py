@@ -5,8 +5,9 @@ import sys
 
 def test_cli_runs_valid_file(capsys):
     source = """
-    x = 1 + 1
-    show x
+    problem "Addition Test"
+        1 + 1 = 2
+    end
     """
     with patch("builtins.open", mock_open(read_data=source)):
         # Pass arguments to main via the argv parameter
@@ -15,9 +16,8 @@ def test_cli_runs_valid_file(capsys):
     captured = capsys.readouterr()
     
     assert return_code == 0
-    assert "x = 1 + 1 → 2" in captured.out
-    assert "show x → 2" in captured.out
-    assert "Output: 2" in captured.out
+    assert "Problem: Addition Test" in captured.out
+    assert "  Step 1: 1 + 1 = 2 (Verified)" in captured.out
 
 def test_cli_handles_file_not_found(capsys):
     with patch("builtins.open", side_effect=FileNotFoundError):

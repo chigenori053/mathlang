@@ -25,10 +25,8 @@ class TokenType(Enum):
     SHOW = auto()
     PROBLEM = auto()
     STEP = auto()
-    STEP_LABEL = auto()
     END = auto()
-    EXPLAIN = auto()
-    DONE = auto()
+    PREPARE = auto()
     PLUS = auto()
     MINUS = auto()
     STAR = auto()
@@ -36,8 +34,6 @@ class TokenType(Enum):
     CARET = auto()
     EQUAL = auto()
     COLON = auto()
-    LBRACKET = auto()
-    RBRACKET = auto()
     LPAREN = auto()
     RPAREN = auto()
     NEWLINE = auto()
@@ -62,13 +58,20 @@ class Lexer:
         self.line = 1
         self.column = 1
         self.language = language
+        self.keywords = {
+            "problem": TokenType.PROBLEM,
+            "prepare": TokenType.PREPARE,
+            "step": TokenType.STEP,
+            "end": TokenType.END,
+            "show": TokenType.SHOW,
+        }
 
     def tokenize(self) -> List[Token]:
         tokens: List[Token] = []
         while not self._is_at_end():
             ch = self._peek()
 
-            if ch in " \t":
+            if ch in " 	":
                 self._advance()
                 continue
 
@@ -81,16 +84,16 @@ class Lexer:
                 self._consume_newline()
                 continue
 
-            if ch in "\"'":
-                tokens.append(self._string(ch))
-                continue
-
             if ch.isdigit():
                 tokens.append(self._number())
                 continue
 
             if ch.isalpha() or ch == "_":
                 tokens.append(self._identifier())
+                continue
+
+            if ch == '"':
+                tokens.append(self._string())
                 continue
 
             single_char_tokens = {
@@ -101,8 +104,6 @@ class Lexer:
                 "^": TokenType.CARET,
                 "=": TokenType.EQUAL,
                 ":": TokenType.COLON,
-                "[": TokenType.LBRACKET,
-                "]": TokenType.RBRACKET,
                 "(": TokenType.LPAREN,
                 ")": TokenType.RPAREN,
             }
@@ -131,12 +132,8 @@ class Lexer:
         return ch
 
     def _peek(self) -> str:
+        if self._is_at_end(): return "\0"
         return self.source[self.index]
-
-    def _peek_next(self) -> str:
-        if self.index + 1 >= self.length:
-            return "\0"
-        return self.source[self.index + 1]
 
     def _is_at_end(self) -> bool:
         return self.index >= self.length
@@ -145,86 +142,47 @@ class Lexer:
         return Token(token_type, lexeme, self.line, self.column)
 
     def _consume_newline(self) -> None:
-        if self._peek() == "\r" and self._peek_next() == "\n":
+        while self._peek() in "\r\n":
             self._advance()
-            self._advance()
-            return
-        self._advance()
 
     def _skip_comment(self) -> None:
-        while not self._is_at_end() and self._peek() not in "\r\n":
+        while self._peek() not in "\r\n" and not self._is_at_end():
             self._advance()
 
-    def _string(self, quote: str) -> Token:
-        start_line, start_column = self.line, self.column
-        self._advance()  # consume opening quote
-        lexeme_chars = []
-
-        while not self._is_at_end():
-            ch = self._peek()
-            if ch == quote:
-                self._advance()
-                lexeme = "".join(lexeme_chars)
-                return Token(TokenType.STRING, lexeme, start_line, start_column)
-            if ch == "\n":
-                break
-            lexeme_chars.append(self._advance())
-
-        raise LexerError(
-            self.language.text(
-                "lexer.unterminated_string",
-                line=start_line,
-                column=start_column,
-            )
-        )
-
     def _number(self) -> Token:
-        start_line, start_column = self.line, self.column
-        lexeme_chars = []
-        has_decimal_point = False
-
-        while not self._is_at_end():
-            ch = self._peek()
-            if ch == ".":
-                if has_decimal_point:
-                    break
-                has_decimal_point = True
-            elif not ch.isdigit():
-                break
-            lexeme_chars.append(self._advance())
-
-        lexeme = "".join(lexeme_chars)
-        return Token(TokenType.NUMBER, lexeme, start_line, start_column)
+        start_pos = self.index
+        while self._peek().isdigit():
+            self._advance()
+        return self._make_token(TokenType.NUMBER, self.source[start_pos:self.index])
 
     def _identifier(self) -> Token:
-        start_line, start_column = self.line, self.column
-        lexeme_chars = []
+        start_pos = self.index
+        while self._peek().isalnum() or self._peek() == "_":
+            self._advance()
+        lexeme = self.source[start_pos:self.index]
+        token_type = self.keywords.get(lexeme, TokenType.IDENT)
+        return self._make_token(token_type, lexeme)
 
-        while not self._is_at_end() and (self._peek().isalnum() or self._peek() == "_"):
-            lexeme_chars.append(self._advance())
+    def _string(self) -> Token:
+        start_pos = self.index
+        self._advance() # Consume the opening quote
 
-        lexeme = "".join(lexeme_chars)
-        keyword_tokens = {
-            "show": TokenType.SHOW,
-            "problem": TokenType.PROBLEM,
-            "step": TokenType.STEP,
-            "end": TokenType.END,
-            "explain": TokenType.EXPLAIN,
-            "done": TokenType.DONE,
-        }
-        token_type = keyword_tokens.get(lexeme, TokenType.IDENT)
-        if token_type is TokenType.IDENT and lexeme.startswith("step"):
-            suffix = lexeme[4:]
-            if suffix.isdigit():
-                token_type = TokenType.STEP_LABEL
-        return Token(token_type, lexeme, start_line, start_column)
+        while self._peek() != '"' and not self._is_at_end():
+            self._advance()
+
+        if self._is_at_end():
+            raise LexerError(self.language.text("lexer.unterminated_string", line=self.line, column=self.column))
+
+        self._advance() # Consume the closing quote
+        lexeme = self.source[start_pos:self.index]
+        return self._make_token(TokenType.STRING, lexeme)
 
 
 class Parser:
     """Turns MathLang source text into an AST program object."""
 
     def __init__(self, source: str, language: LanguagePack | None = None):
-        self._language = language or get_language_pack()
+        self._language = language or get_language_pack("en")
         try:
             self.tokens: Sequence[Token] = Lexer(source, self._language).tokenize()
         except LexerError as exc:
@@ -233,113 +191,103 @@ class Parser:
 
     def parse(self) -> ast.Program:
         statements: List[ast.Statement] = []
-
         self._consume_newlines()
         while not self._is_at_end():
             statements.append(self._parse_statement())
             self._consume_newlines()
-
         return ast.Program(statements=statements)
 
     def _parse_statement(self) -> ast.Statement:
         if self._match(TokenType.PROBLEM):
-            return self._parse_problem()
-
-        if self._match(TokenType.STEP):
-            return self._parse_step()
-
-        if self._check(TokenType.STEP_LABEL) and self._check_next(TokenType.COLON):
-            label_token = self._advance()
-            return self._parse_step(prefixed_label=label_token.lexeme)
-
-        if self._match(TokenType.END):
-            return self._parse_end()
-
-        if self._match(TokenType.EXPLAIN):
-            return self._parse_explain()
-
-        if self._match(TokenType.SHOW):
-            identifier = self._consume(
-                TokenType.IDENT,
-                self._language.text("parser.show_identifier_required"),
-            )
-            return ast.Show(identifier=identifier.lexeme)
-
+            return self._parse_problem_block()
         if self._check(TokenType.IDENT) and self._check_next(TokenType.EQUAL):
-            target = self._consume(
-                TokenType.IDENT,
-                self._language.text("parser.assignment_identifier_required"),
-            )
-            self._consume(TokenType.EQUAL, self._language.text("parser.assignment_equal_missing"))
-            expression = self._parse_expression()
-            return ast.Assignment(target=target.lexeme, expression=expression)
+            return self._parse_assignment()
+        if self._match(TokenType.SHOW):
+            return self._parse_show()
+        
+        token = self._peek()
+        raise ParserError(f"Unexpected token '{token.lexeme}' at line {token.line}, column {token.column}")
 
+    def _parse_assignment(self) -> ast.Assignment:
+        target = self._consume(TokenType.IDENT, "Expected identifier for assignment.")
+        self._consume(TokenType.EQUAL, "Expected '=' after identifier.")
         expression = self._parse_expression()
-        return ast.ExpressionStatement(expression=expression)
+        return ast.Assignment(target=target.lexeme, expression=expression)
 
-    def _parse_problem(self) -> ast.Statement:
-        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="problem"))
-        expression = self._parse_expression()
-        return ast.Problem(expression=expression)
+    def _parse_show(self) -> ast.Show:
+        identifier = self._consume(TokenType.IDENT, "Expected identifier after 'show'.")
+        return ast.Show(identifier=identifier.lexeme)
 
-    def _parse_step(self, prefixed_label: str | None = None) -> ast.Statement:
-        label = prefixed_label or self._parse_step_bracket_label()
-        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="step"))
-        expression = self._parse_expression()
-        return ast.Step(expression=expression, label=label)
+    def _parse_problem_block(self) -> ast.Problem:
+        name_token = self._advance()
+        if name_token.type == TokenType.IDENT:
+            name = name_token.lexeme
+        elif name_token.type == TokenType.STRING:
+            # Remove quotes from the string literal
+            name = name_token.lexeme[1:-1]
+        else:
+            raise ParserError(f"Expected problem name (identifier or string), but got '{name_token.lexeme}' at line {name_token.line}, column {name_token.column}")
+        self._consume_newlines()
 
-    def _parse_step_bracket_label(self) -> str | None:
-        if not self._match(TokenType.LBRACKET):
-            return None
-        if not (self._check(TokenType.IDENT) or self._check(TokenType.NUMBER)):
-            raise ParserError(self._language.text("parser.step_id_required"))
-        label_token = self._advance()
-        self._consume(TokenType.RBRACKET, self._language.text("parser.step_bracket_close_missing"))
-        return f"step[{label_token.lexeme}]"
+        prepare_node: ast.PrepareNode | None = None
+        if self._match(TokenType.PREPARE):
+            self._consume(TokenType.COLON, "Expected ':' after 'prepare'.")
+            self._consume_newlines()
+            assignments: List[ast.Assignment] = []
+            while not self._check(TokenType.STEP) and not self._check(TokenType.END):
+                assignments.append(self._parse_assignment())
+                self._consume_newlines()
+            prepare_node = ast.PrepareNode(assignments=assignments)
 
-    def _parse_end(self) -> ast.Statement:
-        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="end"))
-        if self._match(TokenType.DONE):
-            return ast.End(expression=None, done=True)
-        expression = self._parse_expression()
-        return ast.End(expression=expression, done=False)
+        steps: List[ast.Step] = []
+        while True:
+            if self._check(TokenType.END):
+                break
+            if self._is_at_end():
+                raise ParserError("Expected 'end' to close problem block.")
+            # Allow expressions as steps without 'step' keyword
+            # If 'step' keyword is present, consume it and the colon
+            if self._match(TokenType.STEP):
+                self._consume(TokenType.COLON, "Expected ':' after 'step'.")
+            self._consume_newlines()
+            before = self._parse_expression()
+            self._consume(TokenType.EQUAL, "Expected '=' in step definition.")
+            after = self._parse_expression()
+            steps.append(ast.Step(before=before, after=after))
+            self._consume_newlines()
 
-    def _parse_explain(self) -> ast.Statement:
-        self._consume(TokenType.COLON, self._language.text("parser.colon_missing", keyword="explain"))
-        string_token = self._consume(TokenType.STRING, self._language.text("parser.explain_string_required"))
-        return ast.Explain(message=string_token.lexeme)
+        self._consume(TokenType.END, "Expected 'end' to close problem block.")
+        return ast.Problem(name=name, prepare=prepare_node, steps=steps)
 
     def _parse_expression(self) -> ast.Expr:
         return self._parse_additive()
 
     def _parse_additive(self) -> ast.Expr:
-        terms = [self._parse_multiplicative()]
+        expr = self._parse_multiplicative()
         while self._match(TokenType.PLUS, TokenType.MINUS):
-            operator = self._previous().lexeme
+            op = self._previous()
             right = self._parse_multiplicative()
-            if operator == "-":
-                terms.append(ast.Neg(expr=right))
+            if op.type == TokenType.MINUS:
+                right = ast.Neg(expr=right)
+            
+            if isinstance(expr, ast.Add):
+                expr.terms.append(right)
             else:
-                terms.append(right)
-        
-        if len(terms) == 1:
-            return terms[0]
-        return ast.Add(terms=terms)
+                expr = ast.Add(terms=[expr, right])
+        return expr
 
     def _parse_multiplicative(self) -> ast.Expr:
         expr = self._parse_exponent()
         while self._match(TokenType.STAR, TokenType.SLASH):
-            operator = self._previous()
+            op = self._previous()
             right = self._parse_exponent()
-
-            if operator.type == TokenType.STAR:
+            if op.type == TokenType.STAR:
                 if isinstance(expr, ast.Mul):
                     expr.factors.append(right)
                 else:
                     expr = ast.Mul(factors=[expr, right])
-            elif operator.type == TokenType.SLASH:
+            else:
                 expr = ast.Div(left=expr, right=right)
-
         return expr
 
     def _parse_exponent(self) -> ast.Expr:
@@ -350,54 +298,37 @@ class Parser:
         return expr
 
     def _parse_unary(self) -> ast.Expr:
-        if self._match(TokenType.PLUS):
-            return self._parse_unary()
         if self._match(TokenType.MINUS):
-            right = self._parse_unary()
-            return ast.Neg(expr=right)
+            return ast.Neg(expr=self._parse_unary())
         return self._parse_primary()
 
     def _parse_primary(self) -> ast.Expr:
         if self._match(TokenType.NUMBER):
-            value_str = self._previous().lexeme
-            if "." in value_str:
-                # Not supporting floats in the new AST directly, parsing as int for now.
-                # This should be handled as Rat or with a dedicated Float node if needed.
-                value = int(float(value_str))
-            else:
-                value = int(value_str)
-            return ast.Int(value=value)
+            return ast.Int(value=int(self._previous().lexeme))
         if self._match(TokenType.IDENT):
             return ast.Sym(name=self._previous().lexeme)
         if self._match(TokenType.LPAREN):
             expr = self._parse_expression()
-            self._consume(TokenType.RPAREN, self._language.text("parser.closing_paren_missing"))
+            self._consume(TokenType.RPAREN, "Expected ')' after expression.")
             return expr
+        
         token = self._peek()
-        raise ParserError(
-            self._language.text("parser.unexpected_token", lexeme=token.lexeme, line=token.line, column=token.column)
-        )
-
-    def _consume_newlines(self) -> None:
-        while self._match(TokenType.NEWLINE):
-            continue
-
-    def _match(self, *types: TokenType) -> bool:
-        for token_type in types:
-            if self._check(token_type):
-                self._advance()
-                return True
-        return False
+        raise ParserError(f"Unexpected token '{token.lexeme}' at line {token.line}, column {token.column}")
 
     def _consume(self, token_type: TokenType, message: str) -> Token:
         if self._check(token_type):
             return self._advance()
-        token = self._peek()
-        raise ParserError(f"{message} (line {token.line}, column {token.column})")
+        raise ParserError(message)
+
+    def _match(self, *types: TokenType) -> bool:
+        for t in types:
+            if self._check(t):
+                self._advance()
+                return True
+        return False
 
     def _check(self, token_type: TokenType) -> bool:
-        if self._is_at_end():
-            return False
+        if self._is_at_end(): return False
         return self._peek().type == token_type
 
     def _check_next(self, token_type: TokenType) -> bool:
@@ -405,16 +336,20 @@ class Parser:
             return False
         return self.tokens[self.position + 1].type == token_type
 
-    def _advance(self) -> Token:
-        if not self._is_at_end():
-            self.position += 1
-        return self._previous()
+    def _consume_newlines(self) -> None:
+        while self._match(TokenType.NEWLINE):
+            pass
 
-    def _previous(self) -> Token:
-        return self.tokens[self.position - 1]
+    def _is_at_end(self) -> bool:
+        return self._peek().type == TokenType.EOF
 
     def _peek(self) -> Token:
         return self.tokens[self.position]
 
-    def _is_at_end(self) -> bool:
-        return self._peek().type == TokenType.EOF
+    def _previous(self) -> Token:
+        return self.tokens[self.position - 1]
+
+    def _advance(self) -> Token:
+        if not self._is_at_end():
+            self.position += 1
+        return self._previous()

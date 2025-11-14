@@ -52,8 +52,6 @@ class RationalNode:
 
 Expr = Union[Int, Rat, Sym, Add, Mul, Pow, Neg, Call, Div, RationalNode]
 
-# --- High-level DSL Statements ---
-
 @dataclass(frozen=True)
 class Assignment:
     target: str
@@ -64,11 +62,23 @@ class Show:
     identifier: str
 
 @dataclass(frozen=True)
-class ExpressionStatement:
-    expression: Expr
+class PrepareNode:
+    assignments: List['Assignment']
+
+@dataclass(frozen=True)
+class Step:
+    before: Expr
+    after: Expr
+    label: str | None = None
+
+@dataclass(frozen=True)
+class Problem:
+    name: str
+    prepare: PrepareNode | None
+    steps: List[Step]
 
 # A program can contain multiple problems or other top-level statements.
-Statement = Union[Assignment, Show, ExpressionStatement]
+Statement = Union[Problem, Assignment, Show]
 
 @dataclass(frozen=True)
 class Program:

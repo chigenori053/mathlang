@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Dict, Generator, Iterable, List, Optional, Set
 
 from . import ast_nodes as ast
@@ -22,7 +23,7 @@ class EvaluationResult:
     message: str
 
 class Evaluator:
-    """Evaluates a MathLang program by normalizing expressions."""
+    """Evaluates a MathLang program by processing problem blocks."""
 
     def __init__(
         self,
@@ -31,174 +32,311 @@ class Evaluator:
         learning_logger: LearningLogger | None = None,
     ):
         self.program = program
-        self.context: Dict[str, float] = {}
-        self.expressions: Dict[str, ast.Expr] = {}
-        self._step = 0
-        self._language = language or get_language_pack()
+        self.global_expressions: Dict[str, ast.Expr] = {}
+        self._step_count = 0
+        self._language = language or get_language_pack("en")
         self._learning_logger = learning_logger
         self._arithmetic_engine = ArithmeticEngine()
         self._fraction_engine = FractionEngine()
 
     def run(self) -> List[EvaluationResult]:
-        return list(self.step_eval())
-
-    def step_eval(self) -> Generator[EvaluationResult, None, None]:
+        results = []
         for statement in self.program.statements:
-            yield from self._execute_statement(statement)
+            results.extend(list(self._execute_statement(statement)))
+        return results
 
     def _execute_statement(self, statement: ast.Statement) -> Iterable[EvaluationResult]:
+        if isinstance(statement, ast.Problem):
+            yield from self._evaluate_problem(statement)
+            return
+
         if isinstance(statement, ast.Assignment):
-            substituted_expr = self._substitute_identifiers(statement.expression)
-            normalized_expr = self._normalize_expression(substituted_expr)
-            self.expressions[statement.target] = normalized_expr
-            
-            # This will raise an error on failure, which is caught by the main CLI loop
-            value = self._evaluate_numeric(normalized_expr)
-            self.context[statement.target] = value
-            message = f"{statement.target} = {self._format_expression(statement.expression)} → {self._format_expression(normalized_expr)} (value: {self._format_value(value)})"
-            yield self._next_step(message)
+            # This logic is for global-level assignments
+            normalized_expr = self._normalize_expression(statement.expression)
+            self.global_expressions[statement.target] = normalized_expr
+            self._step_count += 1
+            try:
+                value = self._evaluate_numeric(normalized_expr, self.global_expressions)
+                message = f"Global assignment: {statement.target} = {self._format_expression(normalized_expr)} (value: {value})"
+            except EvaluationError as e:
+                message = f"Global assignment: {statement.target} = {self._format_expression(normalized_expr)} (Error: {e})"
+                raise e # Re-raise the error to propagate it to the main function
+            yield EvaluationResult(self._step_count, message)
             return
 
         if isinstance(statement, ast.Show):
-            if statement.identifier not in self.expressions:
-                raise EvaluationError(f"Unknown identifier '{statement.identifier}'")
-            
-            expr = self.expressions[statement.identifier]
-            normalized_expr = self._normalize_expression(expr)
-            
-            message = f"show {statement.identifier} → {self._format_expression(normalized_expr)}"
-            yield self._next_step(message)
-            
-            value = self._evaluate_numeric(normalized_expr)
-            yield EvaluationResult(step_number=0, message=f"Output: {self._format_value(value)}")
+            if statement.identifier not in self.global_expressions:
+                raise EvaluationError(f"Unknown global identifier '{statement.identifier}'")
+            expr = self.global_expressions[statement.identifier]
+            self._step_count += 1
+            message = f"Show: {statement.identifier} → {self._format_expression(expr)}"
+            yield EvaluationResult(self._step_count, message)
             return
-
-        if isinstance(statement, ast.ExpressionStatement):
-            normalized_expr = self._normalize_expression(statement.expression)
-            message = f"{self._format_expression(statement.expression)} → {self._format_expression(normalized_expr)}"
-            yield self._next_step(message)
-            return
-
+                
         raise EvaluationError(f"Unsupported statement type: {type(statement)}")
 
+    def _evaluate_numeric(self, expression: ast.Expr, context: Dict[str, ast.Expr]) -> int | float | Fraction:
+        # First, substitute any symbols in the expression
+        substituted_expr = self._substitute_identifiers(expression, context)
+
+        if isinstance(substituted_expr, ast.Int):
+            return substituted_expr.value
+        elif isinstance(substituted_expr, ast.Rat):
+            return Fraction(substituted_expr.numerator, substituted_expr.denominator)
+        elif isinstance(substituted_expr, ast.Neg):
+            return -self._evaluate_numeric(substituted_expr.expr, context)
+        elif isinstance(substituted_expr, ast.Add):
+            return sum(self._evaluate_numeric(term, context) for term in substituted_expr.terms)
+        elif isinstance(substituted_expr, ast.Mul):
+            product = 1
+            for factor in substituted_expr.factors:
+                product *= self._evaluate_numeric(factor, context)
+            return product
+        elif isinstance(substituted_expr, ast.Div):
+            numerator = self._evaluate_numeric(substituted_expr.left, context)
+            denominator = self._evaluate_numeric(substituted_expr.right, context)
+            if denominator == 0:
+                raise EvaluationError("Division by zero")
+            return Fraction(numerator, denominator)
+        elif isinstance(substituted_expr, ast.Pow):
+            base = self._evaluate_numeric(substituted_expr.base, context)
+            exp = self._evaluate_numeric(substituted_expr.exp, context)
+            return base ** exp
+        else:
+            raise EvaluationError(f"Cannot evaluate non-numeric expression: {type(substituted_expr)}")
+
+    def _evaluate_problem(self, problem: ast.Problem) -> Iterable[EvaluationResult]:
+
+        self._step_count += 1
+
+        yield EvaluationResult(self._step_count, f"Problem: {problem.name}")
+
+
+
+        local_expressions = self.global_expressions.copy()
+
+        if problem.prepare:
+
+            for assignment in problem.prepare.assignments:
+
+                # Note: Normalization during prepare is not specified, but could be added.
+
+                local_expressions[assignment.target] = assignment.expression
+
+                self._step_count += 1
+
+                yield EvaluationResult(self._step_count, f"  Prepare: {assignment.target} = {self._format_expression(assignment.expression)}")
+
+
+
+        for i, step in enumerate(problem.steps):
+            self._step_count += 1
+            
+            # Substitute variables from the local context
+            before_sub = self._substitute_identifiers(step.before, local_expressions)
+            after_sub = self._substitute_identifiers(step.after, local_expressions)
+
+            # Normalize the 'before' side
+            normalized_before = self._normalize_expression(before_sub)
+
+            # Check for equivalence
+            try:
+                numeric_before = self._evaluate_numeric(normalized_before, local_expressions)
+                numeric_after = self._evaluate_numeric(after_sub, local_expressions)
+                if numeric_before == numeric_after:
+                    status = "Verified"
+                else:
+                    status = f"Failed: Expected {numeric_before}, got {numeric_after}"
+            except EvaluationError as e:
+                status = f"Error during evaluation: {e}"
+
+            message = f"  Step {i+1}: {self._format_expression(step.before)} = {self._format_expression(step.after)} ({status})"
+            yield EvaluationResult(self._step_count, message)
+
+
+
     def _normalize_expression(self, expression: ast.Expr) -> ast.Expr:
+
         if isinstance(expression, (ast.Int, ast.Rat)):
+
             return expression
+
         if isinstance(expression, ast.Sym):
-            return self._substitute_identifiers(expression)
+
+            # Substitution should be handled before normalization
+
+            return expression
+
+
 
         if isinstance(expression, ast.Neg):
+
             return self._arithmetic_engine.normalize(ast.Neg(self._normalize_expression(expression.expr)))
 
+
+
         if isinstance(expression, ast.Add):
+
             normalized_terms = [self._normalize_expression(term) for term in expression.terms]
-            if any(isinstance(t, ast.Div) for t in normalized_terms):
+
+            if any(self._contains_division(t) for t in normalized_terms):
+
                 result = normalized_terms[0]
+
                 for i in range(1, len(normalized_terms)):
+
                     result = self._fraction_engine.add(result, normalized_terms[i])
+
                 return result
+
             return self._arithmetic_engine.normalize(ast.Add(terms=normalized_terms))
 
+
+
         if isinstance(expression, ast.Mul):
+
             normalized_factors = [self._normalize_expression(factor) for factor in expression.factors]
-            if any(isinstance(f, ast.Div) for f in normalized_factors):
+
+            if any(self._contains_division(f) for f in normalized_factors):
+
                 result = normalized_factors[0]
+
                 for i in range(1, len(normalized_factors)):
+
                     result = self._fraction_engine.multiply(result, normalized_factors[i])
+
                 return result
+
             return self._arithmetic_engine.normalize(ast.Mul(factors=normalized_factors))
 
+
+
         if isinstance(expression, ast.Pow):
+
             base = self._normalize_expression(expression.base)
+
             exp = self._normalize_expression(expression.exp)
+
             return self._arithmetic_engine.normalize(ast.Pow(base, exp))
 
+
+
         if isinstance(expression, ast.Div):
+
             left = self._normalize_expression(expression.left)
+
             right = self._normalize_expression(expression.right)
+
             return self._fraction_engine.normalize(ast.Div(left, right))
 
+
+
         return expression
 
-    def _substitute_identifiers(self, expression: ast.Expr, _visited: Optional[Set[str]] = None) -> ast.Expr:
+    
+
+    def _contains_division(self, expression: ast.Expr) -> bool:
+
+        if isinstance(expression, ast.Div):
+
+            return True
+
+        if isinstance(expression, ast.Neg):
+
+            return self._contains_division(expression.expr)
+
+        if isinstance(expression, (ast.Add, ast.Mul)):
+
+            children = expression.terms if isinstance(expression, ast.Add) else expression.factors
+
+            return any(self._contains_division(child) for child in children)
+
+        if isinstance(expression, ast.Pow):
+
+            return self._contains_division(expression.base) or self._contains_division(expression.exp)
+
+        return False
+
+
+
+    def _substitute_identifiers(self, expression: ast.Expr, context: Dict[str, ast.Expr], _visited: Optional[Set[str]] = None) -> ast.Expr:
+
         visited = _visited or set()
+
         if isinstance(expression, ast.Sym):
+
             if expression.name in visited:
-                raise EvaluationError(f"Circular dependency detected for variable '{expression.name}'")
-            if expression.name in self.expressions:
+
+                raise EvaluationError(f"Circular dependency for '{expression.name}'")
+
+            if expression.name in context:
+
                 visited.add(expression.name)
-                return self._substitute_identifiers(self.expressions[expression.name], visited)
+
+                return self._substitute_identifiers(context[expression.name], context, visited)
+
         
+
         if isinstance(expression, ast.Neg):
-            return ast.Neg(self._substitute_identifiers(expression.expr, visited))
+
+            return ast.Neg(self._substitute_identifiers(expression.expr, context, visited))
+
         if isinstance(expression, ast.Add):
-            return ast.Add([self._substitute_identifiers(t, visited) for t in expression.terms])
+
+            return ast.Add([self._substitute_identifiers(t, context, visited) for t in expression.terms])
+
         if isinstance(expression, ast.Mul):
-            return ast.Mul([self._substitute_identifiers(f, visited) for f in expression.factors])
+
+            return ast.Mul([self._substitute_identifiers(f, context, visited) for f in expression.factors])
+
         if isinstance(expression, ast.Pow):
-            return ast.Pow(self._substitute_identifiers(expression.base, visited), self._substitute_identifiers(expression.exp, visited))
+
+            return ast.Pow(self._substitute_identifiers(expression.base, context, visited), self._substitute_identifiers(expression.exp, context, visited))
+
         if isinstance(expression, ast.Div):
-            return ast.Div(self._substitute_identifiers(expression.left, visited), self._substitute_identifiers(expression.right, visited))
+
+            return ast.Div(self._substitute_identifiers(expression.left, context, visited), self._substitute_identifiers(expression.right, context, visited))
+
         
+
         return expression
 
-    def _evaluate_numeric(self, expression: ast.Expr, env: Optional[Dict[str, float]] = None) -> float:
-        local_env = env or {}
-        if isinstance(expression, ast.Int):
-            return float(expression.value)
-        if isinstance(expression, ast.Sym):
-            if expression.name in local_env:
-                return local_env[expression.name]
-            if expression.name in self.context:
-                return self.context[expression.name]
-            raise EvaluationError(f"Cannot evaluate symbol '{expression.name}' to a numeric value.")
-        if isinstance(expression, ast.Neg):
-            return -self._evaluate_numeric(expression.expr, local_env)
-        if isinstance(expression, ast.Add):
-            return sum(self._evaluate_numeric(term, local_env) for term in expression.terms)
-        if isinstance(expression, ast.Mul):
-            val = 1.0
-            for factor in expression.factors:
-                val *= self._evaluate_numeric(factor, local_env)
-            return val
-        if isinstance(expression, ast.Pow):
-            base = self._evaluate_numeric(expression.base, local_env)
-            exp = self._evaluate_numeric(expression.exp, local_env)
-            return base ** exp
-        if isinstance(expression, ast.Div):
-            num = self._evaluate_numeric(expression.left, local_env)
-            den = self._evaluate_numeric(expression.right, local_env)
-            if den == 0:
-                raise EvaluationError("Division by zero.")
-            return num / den
-        raise EvaluationError(f"Cannot evaluate expression type '{type(expression).__name__}' to a numeric value.")
 
-    def _next_step(self, message: str) -> EvaluationResult:
-        self._step += 1
-        return EvaluationResult(step_number=self._step, message=message)
 
     @staticmethod
+
     def _format_expression(expression: ast.Expr) -> str:
-        if isinstance(expression, ast.Int):
-            return str(expression.value)
-        if isinstance(expression, ast.Sym):
-            return expression.name
-        if isinstance(expression, ast.Neg):
-            if isinstance(expression.expr, ast.Add):
-                return f"-({Evaluator._format_expression(expression.expr)})"
-            return f"-{Evaluator._format_expression(expression.expr)}"
-        if isinstance(expression, ast.Add):
-            return " + ".join(Evaluator._format_expression(term) for term in expression.terms).replace(" + -", " - ")
-        if isinstance(expression, ast.Mul):
-            return " * ".join(Evaluator._format_expression(factor) for factor in expression.factors)
-        if isinstance(expression, ast.Pow):
-            return f"({Evaluator._format_expression(expression.base)})^({Evaluator._format_expression(expression.exp)})"
-        if isinstance(expression, ast.Div):
-            return f"({Evaluator._format_expression(expression.left)}) / ({Evaluator._format_expression(expression.right)})"
-        return repr(expression)
 
-    @staticmethod
-    def _format_value(value: float) -> str:
-        if value.is_integer():
-            return str(int(value))
-        return f"{value:.6g}"
+        if isinstance(expression, ast.Int):
+
+            return str(expression.value)
+
+        if isinstance(expression, ast.Sym):
+
+            return expression.name
+
+        if isinstance(expression, ast.Neg):
+
+            if isinstance(expression.expr, ast.Add):
+
+                return f"-({Evaluator._format_expression(expression.expr)})"
+
+            return f"-{Evaluator._format_expression(expression.expr)}"
+
+        if isinstance(expression, ast.Add):
+
+            return " + ".join(Evaluator._format_expression(term) for term in expression.terms).replace(" + -", " - ")
+
+        if isinstance(expression, ast.Mul):
+
+            return " * ".join(Evaluator._format_expression(factor) for factor in expression.factors)
+
+        if isinstance(expression, ast.Pow):
+
+            return f"({Evaluator._format_expression(expression.base)})^({Evaluator._format_expression(expression.exp)})"
+
+        if isinstance(expression, ast.Div):
+
+            return f"({Evaluator._format_expression(expression.left)}) / ({Evaluator._format_expression(expression.right)})"
+
+        return repr(expression)

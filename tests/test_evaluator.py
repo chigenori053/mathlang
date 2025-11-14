@@ -2,66 +2,64 @@ import pytest
 from core.parser import Parser
 from core.evaluator import Evaluator, EvaluationError
 
-def test_arithmetic_normalization():
-    source = "x = 2 + 3 * 2"
-    program = Parser(source).parse()
-    evaluator = Evaluator(program)
-    evaluator.run()
-    # 2 + 6 -> 8
-    assert evaluator.expressions["x"].value == 8
-
-def test_fraction_normalization():
-    source = "y = 1/2 + 1/3"
-    program = Parser(source).parse()
-    evaluator = Evaluator(program)
-    evaluator.run()
-    
-    result = evaluator.expressions["y"]
-    # 1/2 + 1/3 -> 5/6
-    assert result.left.value == 5
-    assert result.right.value == 6
-
-def test_identifier_substitution():
+def test_evaluator_verifies_correct_step():
     source = """
-    a = 2
-    b = 3
-    c = a + b
+    problem CorrectStep
+        step:
+            1 + 2 = 3
+    end
     """
     program = Parser(source).parse()
     evaluator = Evaluator(program)
-    evaluator.run()
-    assert evaluator.expressions["c"].value == 5
+    results = evaluator.run()
+    
+    assert len(results) == 2
+    assert "Problem: CorrectStep" in results[0].message
+    assert "Step 1: 1 + 2 = 3 (Verified)" in results[1].message
 
-def test_symbolic_fraction_reduction():
-    source = "z = (2*a) / (4*a)"
+def test_evaluator_fails_incorrect_step():
+    source = """
+    problem IncorrectStep
+        step:
+            1 + 2 = 4
+    end
+    """
     program = Parser(source).parse()
     evaluator = Evaluator(program)
-    evaluator.run()
+    results = evaluator.run()
     
-    result = evaluator.expressions["z"]
-    # (2*a)/(4*a) -> 1/2
-    assert result.left.value == 1
-    assert result.right.value == 2
+    assert len(results) == 2
+    assert "Failed: Expected 3, got 4" in results[1].message
 
-def test_show_statement():
+def test_evaluator_handles_prepare_and_substitution():
     source = """
-    x = 10 / 2
-    show x
+    problem WithPrepare
+        prepare:
+            x = 2
+            y = 3
+        step:
+            x * y = 6
+    end
     """
     program = Parser(source).parse()
     evaluator = Evaluator(program)
     results = evaluator.run()
     
     messages = [r.message for r in results]
-    
-    assert "x = (10) / (2) → 5 (value: 5)" in messages
-    assert "show x → 5" in messages
-    assert "Output: 5" in messages
+    assert "Problem: WithPrepare" in messages[0]
+    assert "Prepare: x = 2" in messages[1]
+    assert "Prepare: y = 3" in messages[2]
+    assert "Step 1: x * y = 6 (Verified)" in messages[3]
 
-def test_division_by_zero_error():
-    source = "x = 1 / 0"
+def test_evaluator_handles_fraction_step():
+    source = """
+    problem FractionStep
+        step:
+            1/2 + 1/3 = 5/6
+    end
+    """
     program = Parser(source).parse()
     evaluator = Evaluator(program)
+    results = evaluator.run()
     
-    with pytest.raises(EvaluationError, match="Division by zero"):
-        evaluator.run()
+    assert "Step 1: (1) / (2) + (1) / (3) = (5) / (6) (Verified)" in results[1].message
