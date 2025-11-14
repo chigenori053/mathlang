@@ -2,45 +2,31 @@
 
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
-from math import isclose
-from typing import Any, Callable, Dict, Generator, Iterable, List, Optional
+from typing import Dict, Generator, Iterable, List, Optional, Set
 
 from . import ast_nodes as ast
-from .optimizer import clone_expression, optimize_expression
-from .symbolic_engine import SymbolicEngine, SymbolicEngineError
+from .arithmetic_engine import ArithmeticEngine
+from .fraction_engine import FractionEngine
 from .i18n import LanguagePack, get_language_pack
 from .logging import LearningLogger
 from .knowledge import KnowledgeRegistry, KnowledgeNode
 
 
-
 class EvaluationError(RuntimeError):
     """Raised when evaluation cannot proceed due to invalid state."""
-
 
 @dataclass
 class EvaluationResult:
     step_number: int
     message: str
 
-
-@dataclass
-class _CoreSnapshot:
-    expression: ast.Expr
-    formatted: str
-    is_constant: bool
-    value: float | None
-
-
 class Evaluator:
-    """Evaluates a MathLang program while emitting human-friendly steps."""
+    """Evaluates a MathLang program by normalizing expressions."""
 
     def __init__(
         self,
         program: ast.Program,
-        symbolic_engine_factory: Optional[Callable[[], SymbolicEngine]] = None,
         language: LanguagePack | None = None,
         learning_logger: LearningLogger | None = None,
     ):
@@ -49,222 +35,143 @@ class Evaluator:
         self.expressions: Dict[str, ast.Expr] = {}
         self._step = 0
         self._language = language or get_language_pack()
-        self._symbolic_engine_factory = symbolic_engine_factory
-        self._symbolic_engine: Optional[SymbolicEngine] = None
-        self._symbolic_error: Optional[str] = None
-        self._core_problem_active = False
-        self._core_last_snapshot: Optional[_CoreSnapshot] = None
-        self._core_auto_step_index = 0
-        self._core_symbolic_engine: Optional[SymbolicEngine] = None
-        self._core_symbolic_error: Optional[str] = None
-        self._core_random = random.Random(0)
-        self._knowledge_registry = KnowledgeRegistry()
-        self._core_last_rule: Optional[KnowledgeNode] = None
         self._learning_logger = learning_logger
-
-        if symbolic_engine_factory is not None:
-            try:
-                self._symbolic_engine = symbolic_engine_factory()
-            except SymbolicEngineError as exc:
-                self._symbolic_error = str(exc)
+        self._arithmetic_engine = ArithmeticEngine()
+        self._fraction_engine = FractionEngine()
 
     def run(self) -> List[EvaluationResult]:
-        """Evaluate the full program and collect all steps."""
         return list(self.step_eval())
 
     def step_eval(self) -> Generator[EvaluationResult, None, None]:
-        """Generator yielding EvaluationResult for each evaluation step."""
         for statement in self.program.statements:
             yield from self._execute_statement(statement)
 
-    # Internal helpers ----------------------------------------------------------
-
     def _execute_statement(self, statement: ast.Statement) -> Iterable[EvaluationResult]:
-        if isinstance(statement, ast.Problem):
-            snapshot = self._snapshot_expression(statement.expression)
-            self._core_problem_active = True
-            self._core_auto_step_index = 0
-            self._core_last_snapshot = snapshot
-            message = self._language.text("evaluator.core.problem", expression=snapshot.formatted)
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="problem",
-                expression=snapshot.formatted,
-                rendered=snapshot.formatted,
-                status="presented",
-            )
-            yield result
-            return
-
-        if isinstance(statement, ast.Step):
-            self._ensure_problem_declared()
-            snapshot = self._snapshot_expression(statement.expression)
-            verified = self._verify_snapshot(snapshot)
-            self._core_last_snapshot = snapshot
-            label = self._resolve_step_label(statement.label)
-            status = self._status_with_rule(
-                verified
-            )
-            message = self._language.text("evaluator.core.step", label=label, expression=snapshot.formatted, status=status)
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="step",
-                label=label,
-                expression=snapshot.formatted,
-                rendered=snapshot.formatted,
-                status=status,
-                rule_id=self._current_rule_id(),
-            )
-            yield result
-            self._core_last_rule = None
-            return
-
-        if isinstance(statement, ast.End):
-            self._ensure_problem_declared()
-            if statement.done:
-                message = self._language.text("evaluator.core.end_done")
-                result = self._next_step(message)
-                self._log_learning_event(
-                    phase="end",
-                    expression="done",
-                    rendered="done",
-                    status="done",
-                )
-                yield result
-                self._finalize_core_sequence()
-                return
-
-            snapshot = self._snapshot_expression(statement.expression)
-            verified = self._verify_snapshot(snapshot)
-            self._core_last_snapshot = snapshot
-            status = self._status_with_rule(verified)
-            message = self._language.text("evaluator.core.end", expression=snapshot.formatted, status=status)
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="end",
-                expression=snapshot.formatted,
-                rendered=snapshot.formatted,
-                status=status,
-                rule_id=self._current_rule_id(),
-            )
-            yield result
-            self._finalize_core_sequence()
-            return
-
-        if isinstance(statement, ast.Explain):
-            message = self._language.text("evaluator.core.explain", message=statement.message)
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="explain",
-                expression=statement.message,
-                rendered=statement.message,
-                status="info",
-            )
-            yield result
-            return
-
         if isinstance(statement, ast.Assignment):
-            value = self._evaluate_expression(statement.expression)
+            substituted_expr = self._substitute_identifiers(statement.expression)
+            normalized_expr = self._normalize_expression(substituted_expr)
+            self.expressions[statement.target] = normalized_expr
+            
+            # This will raise an error on failure, which is caught by the main CLI loop
+            value = self._evaluate_numeric(normalized_expr)
             self.context[statement.target] = value
-            self.expressions[statement.target] = clone_expression(statement.expression)
-            message = f"{statement.target} = {self._format_expression(statement.expression)} → {self._format_value(value)}"
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="assignment",
-                label=statement.target,
-                expression=self._format_expression(statement.expression),
-                rendered=self._format_value(value),
-                status="info",
-            )
-            yield result
+            message = f"{statement.target} = {self._format_expression(statement.expression)} → {self._format_expression(normalized_expr)} (value: {self._format_value(value)})"
+            yield self._next_step(message)
             return
 
         if isinstance(statement, ast.Show):
-            if statement.identifier not in self.context:
-                raise EvaluationError(
-                    self._language.text("evaluator.undefined_identifier", name=statement.identifier)
-                )
-            value = self.context[statement.identifier]
-            value_str = self._format_value(value)
-            message = self._language.text("evaluator.show_step", identifier=statement.identifier, value=value_str)
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="show",
-                label=statement.identifier,
-                expression=statement.identifier,
-                rendered=value_str,
-                status="info",
-                metadata={"value": value_str},
-            )
-            yield result
-            yield from self._symbolic_trace(statement.identifier)
-            yield EvaluationResult(step_number=0, message=self._language.text("evaluator.output", value=value_str))
+            if statement.identifier not in self.expressions:
+                raise EvaluationError(f"Unknown identifier '{statement.identifier}'")
+            
+            expr = self.expressions[statement.identifier]
+            normalized_expr = self._normalize_expression(expr)
+            
+            message = f"show {statement.identifier} → {self._format_expression(normalized_expr)}"
+            yield self._next_step(message)
+            
+            value = self._evaluate_numeric(normalized_expr)
+            yield EvaluationResult(step_number=0, message=f"Output: {self._format_value(value)}")
             return
 
         if isinstance(statement, ast.ExpressionStatement):
-            value = self._evaluate_expression(statement.expression)
-            message = f"{self._format_expression(statement.expression)} → {self._format_value(value)}"
-            result = self._next_step(message)
-            self._log_learning_event(
-                phase="expression",
-                expression=self._format_expression(statement.expression),
-                rendered=self._format_value(value),
-                status="info",
-            )
-            yield result
+            normalized_expr = self._normalize_expression(statement.expression)
+            message = f"{self._format_expression(statement.expression)} → {self._format_expression(normalized_expr)}"
+            yield self._next_step(message)
             return
 
-        raise EvaluationError(self._language.text("evaluator.unsupported_statement", statement=statement))
+        raise EvaluationError(f"Unsupported statement type: {type(statement)}")
 
-    def _evaluate_expression(self, expression: ast.Expr) -> float:
+    def _normalize_expression(self, expression: ast.Expr) -> ast.Expr:
+        if isinstance(expression, (ast.Int, ast.Rat)):
+            return expression
+        if isinstance(expression, ast.Sym):
+            return self._substitute_identifiers(expression)
+
+        if isinstance(expression, ast.Neg):
+            return self._arithmetic_engine.normalize(ast.Neg(self._normalize_expression(expression.expr)))
+
+        if isinstance(expression, ast.Add):
+            normalized_terms = [self._normalize_expression(term) for term in expression.terms]
+            if any(isinstance(t, ast.Div) for t in normalized_terms):
+                result = normalized_terms[0]
+                for i in range(1, len(normalized_terms)):
+                    result = self._fraction_engine.add(result, normalized_terms[i])
+                return result
+            return self._arithmetic_engine.normalize(ast.Add(terms=normalized_terms))
+
+        if isinstance(expression, ast.Mul):
+            normalized_factors = [self._normalize_expression(factor) for factor in expression.factors]
+            if any(isinstance(f, ast.Div) for f in normalized_factors):
+                result = normalized_factors[0]
+                for i in range(1, len(normalized_factors)):
+                    result = self._fraction_engine.multiply(result, normalized_factors[i])
+                return result
+            return self._arithmetic_engine.normalize(ast.Mul(factors=normalized_factors))
+
+        if isinstance(expression, ast.Pow):
+            base = self._normalize_expression(expression.base)
+            exp = self._normalize_expression(expression.exp)
+            return self._arithmetic_engine.normalize(ast.Pow(base, exp))
+
+        if isinstance(expression, ast.Div):
+            left = self._normalize_expression(expression.left)
+            right = self._normalize_expression(expression.right)
+            return self._fraction_engine.normalize(ast.Div(left, right))
+
+        return expression
+
+    def _substitute_identifiers(self, expression: ast.Expr, _visited: Optional[Set[str]] = None) -> ast.Expr:
+        visited = _visited or set()
+        if isinstance(expression, ast.Sym):
+            if expression.name in visited:
+                raise EvaluationError(f"Circular dependency detected for variable '{expression.name}'")
+            if expression.name in self.expressions:
+                visited.add(expression.name)
+                return self._substitute_identifiers(self.expressions[expression.name], visited)
+        
+        if isinstance(expression, ast.Neg):
+            return ast.Neg(self._substitute_identifiers(expression.expr, visited))
+        if isinstance(expression, ast.Add):
+            return ast.Add([self._substitute_identifiers(t, visited) for t in expression.terms])
+        if isinstance(expression, ast.Mul):
+            return ast.Mul([self._substitute_identifiers(f, visited) for f in expression.factors])
+        if isinstance(expression, ast.Pow):
+            return ast.Pow(self._substitute_identifiers(expression.base, visited), self._substitute_identifiers(expression.exp, visited))
+        if isinstance(expression, ast.Div):
+            return ast.Div(self._substitute_identifiers(expression.left, visited), self._substitute_identifiers(expression.right, visited))
+        
+        return expression
+
+    def _evaluate_numeric(self, expression: ast.Expr, env: Optional[Dict[str, float]] = None) -> float:
+        local_env = env or {}
         if isinstance(expression, ast.Int):
             return float(expression.value)
-        if isinstance(expression, ast.Rat):
-            return expression.p / expression.q
         if isinstance(expression, ast.Sym):
-            if expression.name not in self.context:
-                raise EvaluationError(
-                    self._language.text("evaluator.undefined_identifier", name=expression.name)
-                )
-            return self.context[expression.name]
+            if expression.name in local_env:
+                return local_env[expression.name]
+            if expression.name in self.context:
+                return self.context[expression.name]
+            raise EvaluationError(f"Cannot evaluate symbol '{expression.name}' to a numeric value.")
         if isinstance(expression, ast.Neg):
-            return -self._evaluate_expression(expression.expr)
+            return -self._evaluate_numeric(expression.expr, local_env)
         if isinstance(expression, ast.Add):
-            return sum(self._evaluate_expression(term) for term in expression.terms)
+            return sum(self._evaluate_numeric(term, local_env) for term in expression.terms)
         if isinstance(expression, ast.Mul):
-            result = 1.0
+            val = 1.0
             for factor in expression.factors:
-                result *= self._evaluate_expression(factor)
-            return result
+                val *= self._evaluate_numeric(factor, local_env)
+            return val
         if isinstance(expression, ast.Pow):
-            base = self._evaluate_expression(expression.base)
-            exp = self._evaluate_expression(expression.exp)
-            if base == 0 and exp < 0:
-                raise EvaluationError(self._language.text("evaluator.division_by_zero"))
+            base = self._evaluate_numeric(expression.base, local_env)
+            exp = self._evaluate_numeric(expression.exp, local_env)
             return base ** exp
-        if isinstance(expression, ast.Call):
-            # Basic support for call, can be extended
-            # For now, we don't have functions defined
-            raise EvaluationError(self._language.text("evaluator.unsupported_expression", expression=expression))
-
-        raise EvaluationError(self._language.text("evaluator.unsupported_expression", expression=expression))
-
-    def _apply_operator(self, operator: str, left: float, right: float) -> float:
-        # This method is no longer used by _evaluate_expression, but might be used elsewhere.
-        # Keeping it for now to avoid breaking other parts of the code.
-        if operator == "+":
-            return left + right
-        if operator == "-":
-            return left - right
-        if operator == "*":
-            return left * right
-        if operator == "/":
-            if right == 0:
-                raise EvaluationError(self._language.text("evaluator.division_by_zero"))
-            return left / right
-        if operator == "^":
-            return left**right
-        raise EvaluationError(self._language.text("evaluator.unsupported_operator", operator=operator))
+        if isinstance(expression, ast.Div):
+            num = self._evaluate_numeric(expression.left, local_env)
+            den = self._evaluate_numeric(expression.right, local_env)
+            if den == 0:
+                raise EvaluationError("Division by zero.")
+            return num / den
+        raise EvaluationError(f"Cannot evaluate expression type '{type(expression).__name__}' to a numeric value.")
 
     def _next_step(self, message: str) -> EvaluationResult:
         self._step += 1
@@ -274,46 +181,20 @@ class Evaluator:
     def _format_expression(expression: ast.Expr) -> str:
         if isinstance(expression, ast.Int):
             return str(expression.value)
-        if isinstance(expression, ast.Rat):
-            return f"({expression.p}/{expression.q})"
         if isinstance(expression, ast.Sym):
             return expression.name
         if isinstance(expression, ast.Neg):
+            if isinstance(expression.expr, ast.Add):
+                return f"-({Evaluator._format_expression(expression.expr)})"
             return f"-{Evaluator._format_expression(expression.expr)}"
         if isinstance(expression, ast.Add):
-            return " + ".join(Evaluator._format_expression(term) for term in expression.terms)
+            return " + ".join(Evaluator._format_expression(term) for term in expression.terms).replace(" + -", " - ")
         if isinstance(expression, ast.Mul):
             return " * ".join(Evaluator._format_expression(factor) for factor in expression.factors)
         if isinstance(expression, ast.Pow):
-            base = Evaluator._format_expression(expression.base)
-            exp = Evaluator._format_expression(expression.exp)
-            return f"({base})^({exp})"
-        if isinstance(expression, ast.Call):
-            args = ", ".join(Evaluator._format_expression(arg) for arg in expression.args)
-            return f"{expression.name}({args})"
-        return repr(expression)
-
-    @staticmethod
-    def _format_expression_symbolic(expression: ast.Expr) -> str:
-        if isinstance(expression, ast.Int):
-            return str(expression.value)
-        if isinstance(expression, ast.Rat):
-            return f"({expression.p}/{expression.q})"
-        if isinstance(expression, ast.Sym):
-            return expression.name
-        if isinstance(expression, ast.Neg):
-            return f"-({Evaluator._format_expression_symbolic(expression.expr)})"
-        if isinstance(expression, ast.Add):
-            return f"({' + '.join(Evaluator._format_expression_symbolic(term) for term in expression.terms)})"
-        if isinstance(expression, ast.Mul):
-            return f"({' * '.join(Evaluator._format_expression_symbolic(factor) for factor in expression.factors)})"
-        if isinstance(expression, ast.Pow):
-            base = Evaluator._format_expression_symbolic(expression.base)
-            exp = Evaluator._format_expression_symbolic(expression.exp)
-            return f"({base})**({exp})"
-        if isinstance(expression, ast.Call):
-            args = ", ".join(Evaluator._format_expression_symbolic(arg) for arg in expression.args)
-            return f"{expression.name}({args})"
+            return f"({Evaluator._format_expression(expression.base)})^({Evaluator._format_expression(expression.exp)})"
+        if isinstance(expression, ast.Div):
+            return f"({Evaluator._format_expression(expression.left)}) / ({Evaluator._format_expression(expression.right)})"
         return repr(expression)
 
     @staticmethod
@@ -321,260 +202,3 @@ class Evaluator:
         if value.is_integer():
             return str(int(value))
         return f"{value:.6g}"
-
-    # Symbolic helpers ----------------------------------------------------------
-
-    def _symbolic_trace(self, identifier: str) -> Iterable[EvaluationResult]:
-        if self._symbolic_engine_factory is None:
-            return []
-
-        if self._symbolic_engine is None:
-            if self._symbolic_error is None:
-                return []
-            # 既にエラーが発生している場合は一度だけ通知
-            error_message = self._symbolic_error
-            # エラーメッセージが複数回出力されるのを防ぐ
-            self._symbolic_error = None
-            return [EvaluationResult(step_number=0, message=self._language.text("symbolic.disabled", error=error_message))]
-
-        expression = self.expressions.get(identifier)
-        if expression is None:
-            # This part needs to be updated for the new AST.
-            # For now, creating an Int node as a placeholder.
-            expression = ast.Int(value=int(self.context[identifier]))
-
-        # optimized = optimize_expression(expression, self.expressions) # TODO: Fix optimizer
-        optimized = expression
-        expression_str = self._format_expression(optimized)
-
-        try:
-            result = self._symbolic_engine.simplify(expression_str)
-            structure = self._symbolic_engine.explain(expression_str)
-        except SymbolicEngineError as exc:
-            return [EvaluationResult(step_number=0, message=f"[Symbolic Error] {exc}")]
-
-        return [
-            EvaluationResult(step_number=0, message=self._language.text("symbolic.result", result=result.simplified)),
-            EvaluationResult(step_number=0, message=self._language.text("symbolic.explanation", explanation=result.explanation)),
-            EvaluationResult(step_number=0, message=self._language.text("symbolic.structure", structure=structure)),
-        ]
-
-    # Core DSL helpers ---------------------------------------------------------
-
-    def _snapshot_expression(self, expression: ast.Expr) -> _CoreSnapshot:
-        optimized = optimize_expression(expression, self.expressions)
-        formatted = self._format_expression(optimized)
-        if isinstance(optimized, ast.Int):
-            return _CoreSnapshot(expression=optimized, formatted=formatted, is_constant=True, value=float(optimized.value))
-        if isinstance(optimized, ast.Rat):
-            return _CoreSnapshot(expression=optimized, formatted=formatted, is_constant=True, value=optimized.p / optimized.q)
-        return _CoreSnapshot(expression=optimized, formatted=formatted, is_constant=False, value=None)
-
-    def _ensure_problem_declared(self) -> None:
-        if not self._core_problem_active or self._core_last_snapshot is None:
-            raise EvaluationError(self._language.text("evaluator.core.missing_problem"))
-
-    def _verify_snapshot(self, snapshot: _CoreSnapshot) -> bool:
-        self._core_last_rule = None
-        if self._core_last_snapshot and self._core_last_snapshot.is_constant and snapshot.is_constant:
-            expected_value = self._core_last_snapshot.value
-            actual_value = snapshot.value
-            if expected_value is None or actual_value is None:
-                return False
-            if isclose(expected_value, actual_value, rel_tol=1e-9, abs_tol=1e-9):
-                self._core_last_rule = self._lookup_knowledge(self._core_last_snapshot, snapshot)
-                return True
-            raise EvaluationError(
-                self._language.text(
-                    "evaluator.core.invalid_step",
-                    expected=self._format_value(expected_value),
-                    actual=self._format_value(actual_value),
-                )
-            )
-
-        if self._core_last_snapshot:
-            engine = self._get_core_symbolic_engine()
-            if engine is not None:
-                previous_expr_display = self._format_expression(self._core_last_snapshot.expression)
-                current_expr_display = self._format_expression(snapshot.expression)
-                previous_expr_sym = self._format_expression_symbolic(self._core_last_snapshot.expression)
-                current_expr_sym = self._format_expression_symbolic(snapshot.expression)
-                diff_expr = f"({previous_expr_sym}) - ({current_expr_sym})"
-                try:
-                    result = engine.simplify(diff_expr)
-                except SymbolicEngineError:
-                    pass
-                else:
-                    if result.simplified.strip() == "0":
-                        self._core_last_rule = self._lookup_knowledge(self._core_last_snapshot, snapshot)
-                        return True
-                    raise EvaluationError(
-                        self._language.text(
-                            "evaluator.core.invalid_step",
-                            expected=previous_expr_display,
-                            actual=current_expr_display,
-                        )
-                    )
-
-            if self._probabilistic_equivalence(self._core_last_snapshot.expression, snapshot.expression):
-                self._core_last_rule = self._lookup_knowledge(self._core_last_snapshot, snapshot)
-                return True
-
-        return False
-
-    def _resolve_step_label(self, explicit_label: str | None) -> str:
-        if explicit_label:
-            self._sync_auto_step_counter(explicit_label)
-            return explicit_label
-        self._core_auto_step_index += 1
-        return f"step{self._core_auto_step_index}"
-
-    def _sync_auto_step_counter(self, label: str) -> None:
-        index = None
-        if label.startswith("step[") and label.endswith("]"):
-            inner = label[5:-1]
-            if inner.isdigit():
-                index = int(inner)
-        elif label.startswith("step"):
-            suffix = label[4:]
-            if suffix.isdigit():
-                index = int(suffix)
-        if index is not None and index > self._core_auto_step_index:
-            self._core_auto_step_index = index
-
-    def _finalize_core_sequence(self) -> None:
-        self._core_problem_active = False
-        self._core_last_snapshot = None
-        self._core_auto_step_index = 0
-        self._core_last_rule = None
-
-    def _get_core_symbolic_engine(self) -> Optional[SymbolicEngine]:
-        if self._symbolic_engine is not None:
-            return self._symbolic_engine
-        if self._core_symbolic_engine is not None:
-            return self._core_symbolic_engine
-        if self._core_symbolic_error is not None:
-            return None
-        try:
-            self._core_symbolic_engine = SymbolicEngine()
-        except SymbolicEngineError as exc:
-            self._core_symbolic_error = str(exc)
-            return None
-        return self._core_symbolic_engine
-
-    def _probabilistic_equivalence(self, reference: ast.Expr, candidate: ast.Expr) -> bool:
-        variables: set[str] = set()
-        self._collect_identifiers(reference, variables)
-        self._collect_identifiers(candidate, variables)
-        if not variables:
-            return False
-
-        samples = 5
-        attempts = 0
-        successes = 0
-        while attempts < samples and successes < samples:
-            attempts += 1
-            env = {var: self._core_random.uniform(2, 11) for var in variables}
-            try:
-                ref_val = self._evaluate_expression_numeric(reference, env)
-                cand_val = self._evaluate_expression_numeric(candidate, env)
-            except ZeroDivisionError:
-                continue
-            if not isclose(ref_val, cand_val, rel_tol=1e-6, abs_tol=1e-6):
-                raise EvaluationError(
-                    self._language.text(
-                        "evaluator.core.invalid_step",
-                        expected=self._format_expression(reference),
-                        actual=self._format_expression(candidate),
-                    )
-                )
-            successes += 1
-
-        return successes > 0
-
-    def _collect_identifiers(self, expression: ast.Expr, sink: set[str]) -> None:
-        if isinstance(expression, ast.Sym):
-            sink.add(expression.name)
-        elif isinstance(expression, ast.Neg):
-            self._collect_identifiers(expression.expr, sink)
-        elif isinstance(expression, ast.Add):
-            for term in expression.terms:
-                self._collect_identifiers(term, sink)
-        elif isinstance(expression, ast.Mul):
-            for factor in expression.factors:
-                self._collect_identifiers(factor, sink)
-        elif isinstance(expression, ast.Pow):
-            self._collect_identifiers(expression.base, sink)
-            self._collect_identifiers(expression.exp, sink)
-        elif isinstance(expression, ast.Call):
-            for arg in expression.args:
-                self._collect_identifiers(arg, sink)
-
-    def _evaluate_expression_numeric(self, expression: ast.Expr, env: Dict[str, float]) -> float:
-        if isinstance(expression, ast.Int):
-            return float(expression.value)
-        if isinstance(expression, ast.Rat):
-            return expression.p / expression.q
-        if isinstance(expression, ast.Sym):
-            return env[expression.name]
-        if isinstance(expression, ast.Neg):
-            return -self._evaluate_expression_numeric(expression.expr, env)
-        if isinstance(expression, ast.Add):
-            return sum(self._evaluate_expression_numeric(term, env) for term in expression.terms)
-        if isinstance(expression, ast.Mul):
-            result = 1.0
-            for factor in expression.factors:
-                result *= self._evaluate_expression_numeric(factor, env)
-            return result
-        if isinstance(expression, ast.Pow):
-            base = self._evaluate_expression_numeric(expression.base, env)
-            exp = self._evaluate_expression_numeric(expression.exp, env)
-            if isclose(base, 0.0, abs_tol=1e-12) and exp < 0:
-                raise ZeroDivisionError
-            return base ** exp
-        if isinstance(expression, ast.Call):
-            raise EvaluationError(self._language.text("evaluator.unsupported_expression", expression=expression))
-        raise EvaluationError(self._language.text("evaluator.unsupported_expression", expression=expression))
-
-    def _log_learning_event(
-        self,
-        *,
-        phase: str,
-        expression: str,
-        rendered: str,
-        status: str,
-        label: str | None = None,
-        rule_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        if self._learning_logger is None:
-            return
-        self._learning_logger.record(
-            step_number=self._step,
-            phase=phase,
-            label=label,
-            expression=expression,
-            rendered=rendered,
-            rule_id=rule_id,
-            status=status,
-            metadata=metadata or {},
-        )
-
-    def _current_rule_id(self) -> Optional[str]:
-        if self._core_last_rule is None:
-            return None
-        return self._core_last_rule.id
-
-    def _status_with_rule(self, verified: bool) -> str:
-        status = self._language.text(
-            "evaluator.core.status.verified" if verified else "evaluator.core.status.unverified"
-        )
-        if self._core_last_rule is not None:
-            rule_label = self._language.text("evaluator.core.rule", rule=self._core_last_rule.id)
-            status = f"{status} ({rule_label})"
-        return status
-
-    def _lookup_knowledge(self, before: _CoreSnapshot | None, after: _CoreSnapshot) -> Optional[KnowledgeNode]:
-        if before is None:
-            return None
-        return self._knowledge_registry.match(before.formatted, after.formatted)

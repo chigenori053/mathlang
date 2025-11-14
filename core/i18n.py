@@ -20,7 +20,12 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "parser.colon_missing": "'{keyword}' には ':' が必要です",
         "parser.step_id_required": "step[...] には識別子または数値IDが必要です",
         "parser.step_bracket_close_missing": "step[...] の ']' が不足しています",
+        "parser.step_equal_missing": "step には '=' が必要です",
         "parser.explain_string_required": "explain には文字列リテラルが必要です",
+        "parser.problem_required": "プログラムは problem から開始する必要があります",
+        "parser.problem_name_identifier": "problem には識別子名を指定してください",
+        "parser.step_required": "problem ブロックには少なくとも1つの step が必要です",
+        "parser.trailing_tokens": "end の後ろに予期しないトークン '{lexeme}' (行 {line}, 列 {column}) があります",
 
         # Evaluator ----------------------------------------------------------
         "evaluator.undefined_identifier": "識別子 '{name}' が未定義です",
@@ -40,6 +45,8 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "evaluator.core.missing_problem": "problem 宣言の前に step/end は使用できません",
         "evaluator.core.invalid_step": "途中計算が不正です (期待: {expected}, 現在: {actual})",
         "evaluator.core.rule": "rule: {rule}",
+        "evaluator.core.no_rule": "同値性を説明するルールが見つかりません: {before} = {after}",
+        "evaluator.core.non_equivalent": "同値ではありません: {before} ≠ {after}",
 
         # Symbolic trace -----------------------------------------------------
         "symbolic.disabled": "[シンボリック無効] {error}",
@@ -93,7 +100,12 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "parser.colon_missing": "'{keyword}' requires a ':' separator.",
         "parser.step_id_required": "step[...] requires an identifier or numeric id.",
         "parser.step_bracket_close_missing": "Missing closing ']' in step label.",
+        "parser.step_equal_missing": "A step requires an '=' sign.",
         "parser.explain_string_required": "'explain' requires a string literal.",
+        "parser.problem_required": "A MathLang program must start with a 'problem' block.",
+        "parser.problem_name_identifier": "Provide an identifier after 'problem'.",
+        "parser.step_required": "A problem block requires at least one step.",
+        "parser.trailing_tokens": "Unexpected token '{lexeme}' after 'end' (line {line}, column {column}).",
 
         # Evaluator ----------------------------------------------------------
         "evaluator.undefined_identifier": "Identifier '{name}' is not defined",
@@ -113,6 +125,8 @@ _TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "evaluator.core.missing_problem": "step/end cannot appear before a problem declaration",
         "evaluator.core.invalid_step": "Step is not equivalent (expected {expected}, got {actual})",
         "evaluator.core.rule": "rule: {rule}",
+        "evaluator.core.no_rule": "No knowledge rule matches: {before} = {after}",
+        "evaluator.core.non_equivalent": "Not equivalent: {before} ≠ {after}",
 
         # Symbolic trace -----------------------------------------------------
         "symbolic.disabled": "[Symbolic Disabled] {error}",

@@ -1,28 +1,25 @@
-# Polynomial Arithmetic Example for MathLang Core DSL v1
+# Polynomial Arithmetic Example for MathLang Core DSL v2.2
 
 # --- Addition ---
 problem: (x + 1) + (x + 2)
-step1: x + 1 + x + 2
-step2: 2*x + 3
+step: (x + 1) + (x + 2) = 2*x + 3
 explain: "Combine like terms to collect x"
-end: 2*x + 3
+end: done
 
 # --- Subtraction ---
 problem: (x^2 + 3*x + 2) - (x + 2)
-step1: x^2 + 3*x + 2 - x - 2
-step2: x^2 + 2*x
+step: (x^2 + 3*x + 2) - (x + 2) = x^2 + 2*x
 explain: "Cancel constants, then merge x terms"
-end: x^2 + 2*x
+end: done
 
 # --- Multiplication ---
 problem: (x + y) * (x - y)
-step1: x*x - x*y + y*x - y*y
-step2: x^2 - y^2
+step: (x + y) * (x - y) = x^2 - y^2
 explain: "Apply distributive law to reach the difference of squares"
-end: x^2 - y^2
+end: done
 
 # --- Division ---
 problem: (2*x*y) / 2
-step1: x*y
+step: (2*x*y) / 2 = x*y
 explain: "Cancel the constant factor"
-end: x*y
+end: done

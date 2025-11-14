@@ -48,6 +48,7 @@ Expected output:
 - Switch output language (default: Japanese): `python main.py --language en -c "show 1 + 2"`
 
 The CLI prints each evaluator step (`ステップ N` / `Step N`) plus the final `出力` / `Output` marker in the language you choose, and symbolic mode reports simplified forms, explanations, and tree structures for the provided expression.
+Each `step` line is followed by a `normalized:` equality (the canonicalized before/after) and the `rule:` identifier supplied by the KnowledgeRegistry so you can trace why the step was accepted.
 
 ## Learning Logs & Notebook Demo
 MathLang now ships with a lightweight `LearningLogger` that records `problem → step → end` events (including rule IDs supplied by the knowledge base) as JSON. You can pass the logger into an evaluator:
@@ -57,9 +58,10 @@ from core.logging import LearningLogger
 from core.parser import Parser
 from core.evaluator import Evaluator
 
-source = \"\"\"problem: (2 + 3) * 4
-step: 5 * 4
-end: 20\"\"\"
+source = \"\"\"problem Sample
+    step:
+        (2 + 3) * 4 = 20
+end\"\"\"
 
 logger = LearningLogger()
 program = Parser(source).parse()

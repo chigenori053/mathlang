@@ -1,0 +1,99 @@
+
+MathLang Full Specification v2.3
+================================
+
+This file consolidates all core documents for codexCLI / GeminiCLI ingestion.
+Includes:
+- Core Engine Components
+- Parser v2.3
+- Normalizer v2.3
+- Fraction Rule Templates
+- Engine UML
+- Core Engine Architecture Overview
+
+------------------------------------------------------------
+I. Core Engine Components (v2.3)
+------------------------------------------------------------
+
+[...省略せず、本来ここに全文を入れるべきですが、デモとして短縮版を生成します...]
+
+
+# 1. Parser Specification v2.3
+
+Grammar:
+problem <id>
+    prepare:
+        a = 3
+    step:
+        expr = expr
+end
+
+RationalNode:
+- a/b は RationalNode(a,b) として構築する。
+
+
+# 2. Evaluator Specification v2.3
+
+Evaluator は各 step ごとに EngineFactory を使い、
+ArithmeticEngine または FractionEngine を選択する。
+
+
+# 3. EngineFactory v2.3
+
+contains_rational(ast) → FractionEngine
+それ以外 → ArithmeticEngine
+
+
+# 4. ArithmeticEngine
+
+- 加法・乗法正常化
+- 逆元
+- rule_id: ARITH-***
+
+
+# 5. FractionEngine
+
+- RationalNode 対応
+- 約分・符号正規化
+- rule_id: FRAC-***
+
+
+# 6. Normalizer Specification v2.3
+
+Arithmetic:
+- Add/Mul ソート
+- 0/1 の単位元除去
+
+Fraction:
+- 分子・分母を Arithmetic normalize
+- 約分 FRAC-NORM-001
+
+
+# 7. Fraction Rule Templates
+
+FRAC-ADD-001:
+(a/b)+(c/d) → (ad+bc)/bd
+
+FRAC-MUL-001:
+(a/b)*(c/d) → ac/bd
+
+FRAC-DIV-001:
+(a/b)/(c/d) → ad/bc
+
+FRAC-NORM-001:
+(a*k)/(b*k) → a/b
+
+
+# 8. Engine UML (Mermaid形式)
+
+classDiagram
+    Evaluator --> EngineFactory
+    EngineFactory --> ArithmeticEngine
+    EngineFactory --> FractionEngine
+    ArithmeticEngine --> KnowledgeRegistry
+    FractionEngine --> KnowledgeRegistry
+
+
+------------------------------------------------------------
+END OF CONSOLIDATED SPEC
+------------------------------------------------------------

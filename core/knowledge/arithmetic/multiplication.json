@@ -2,11 +2,41 @@
   {
     "id": "ARITH-MUL-001",
     "category": "arithmetic.multiplication",
-    "title": "Difference of squares expansion",
+    "title": "Left distributive law",
     "pattern": {
-      "before": "x * x - x * y + y * x - y * y",
-      "after": "x ^ 2 - y ^ 2"
+      "before": "a * (b + c)",
+      "after": "a * b + a * c"
     },
-    "explanation": "分配法則を適用して (x + y)(x - y) の展開形を正規化する。"
+    "explanation": "a を括弧内の各項に掛ける分配法則。"
+  },
+  {
+    "id": "ARITH-MUL-002",
+    "category": "arithmetic.multiplication",
+    "title": "Right distributive law",
+    "pattern": {
+      "before": "(a + b) * c",
+      "after": "a * c + b * c"
+    },
+    "explanation": "右側にある c を各項に掛ける分配法則。"
+  },
+  {
+    "id": "ARITH-MUL-003",
+    "category": "arithmetic.multiplication",
+    "title": "Factor common left multiplier",
+    "pattern": {
+      "before": "a * b + a * c",
+      "after": "a * (b + c)"
+    },
+    "explanation": "共通因子 a を括り出す。"
+  },
+  {
+    "id": "ARITH-MUL-004",
+    "category": "arithmetic.multiplication",
+    "title": "Factor common right multiplier",
+    "pattern": {
+      "before": "a * c + b * c",
+      "after": "(a + b) * c"
+    },
+    "explanation": "右側の共通因子 c を括り出す。"
   }
 ]

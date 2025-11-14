@@ -327,19 +327,20 @@ class Parser:
         return ast.Add(terms=terms)
 
     def _parse_multiplicative(self) -> ast.Expr:
-        factors = [self._parse_exponent()]
+        expr = self._parse_exponent()
         while self._match(TokenType.STAR, TokenType.SLASH):
-            operator = self._previous().lexeme
+            operator = self._previous()
             right = self._parse_exponent()
-            if operator == "/":
-                # Represent division as multiplication by the reciprocal
-                factors.append(ast.Pow(base=right, exp=ast.Int(value=-1)))
-            else:
-                factors.append(right)
 
-        if len(factors) == 1:
-            return factors[0]
-        return ast.Mul(factors=factors)
+            if operator.type == TokenType.STAR:
+                if isinstance(expr, ast.Mul):
+                    expr.factors.append(right)
+                else:
+                    expr = ast.Mul(factors=[expr, right])
+            elif operator.type == TokenType.SLASH:
+                expr = ast.Div(left=expr, right=right)
+
+        return expr
 
     def _parse_exponent(self) -> ast.Expr:
         expr = self._parse_unary()

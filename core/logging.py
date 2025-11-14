@@ -64,5 +64,6 @@ class LearningLogger:
     def write(self, path: Path) -> None:
         import json
 
+        if path.parent and not path.parent.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
