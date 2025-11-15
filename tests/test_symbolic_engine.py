@@ -1,50 +1,24 @@
 import pytest
 
-from core.symbolic_engine import SymbolicEngine, SymbolicEngineError
+from core.symbolic_engine import SymbolicEngine
+from core.errors import InvalidExprError
 
 
-class FakeExpr:
-    def __init__(self, text: str):
-        self.text = text.strip()
-
-    def __str__(self) -> str:  # pragma: no cover - trivial string conversion.
-        return self.text
-
-    def __eq__(self, other: object) -> bool:  # pragma: no cover - structural equality.
-        return isinstance(other, FakeExpr) and self.text == other.text
+def test_is_equiv_checks_math_equivalence():
+    engine = SymbolicEngine()
+    assert engine.is_equiv("3 + 5", "8")
+    assert engine.is_equiv("(x + 1) * (x + 2)", "x**2 + 3*x + 2")
+    assert not engine.is_equiv("x + 1", "x + 2")
 
 
-class FakeSymPy:
-    def sympify(self, expression: str) -> FakeExpr:
-        if expression.strip() == "??":
-            raise ValueError("invalid expression")
-        return FakeExpr(expression)
-
-    def simplify(self, expr: FakeExpr) -> FakeExpr:
-        if expr.text.endswith(" + 0"):
-            return FakeExpr(expr.text[:-4])
-        return expr
-
-    def srepr(self, expr: FakeExpr) -> str:
-        return f"FakeExpr({expr.text})"
+def test_simplify_and_explain():
+    engine = SymbolicEngine()
+    assert engine.simplify("(3 + 5) * 1") == "8"
+    message = engine.explain("x + 0", "x")
+    assert "equivalent" in message.lower()
 
 
-def test_simplify_reports_transformation():
-    engine = SymbolicEngine(sympy_module=FakeSymPy())
-    result = engine.simplify("a + 0")
-
-    assert result.simplified == "a"
-    assert "Simplified" in result.explanation
-
-
-def test_explain_returns_structured_representation():
-    engine = SymbolicEngine(sympy_module=FakeSymPy())
-    assert engine.explain("x + y") == "FakeExpr(x + y)"
-
-
-def test_engine_raises_when_sympy_missing(monkeypatch):
-    # Simulate that the initial import of sympy failed.
-    monkeypatch.setattr("core.symbolic_engine._sympy", None)
-
-    with pytest.raises(SymbolicEngineError, match="SymPy is not available"):
-        SymbolicEngine()
+def test_invalid_expression_raises():
+    engine = SymbolicEngine()
+    with pytest.raises(InvalidExprError):
+        engine.to_internal("???")

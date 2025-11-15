@@ -20,11 +20,17 @@ class FractionEngine:
         - Normalizes signs (e.g., a/-b -> -a/b).
         - Recursively normalizes numerator and denominator.
         """
-        if not isinstance(expression, ast.Div):
+        if isinstance(expression, ast.Div):
+            numerator_expr = expression.left
+            denominator_expr = expression.right
+        elif isinstance(expression, ast.RationalNode):
+            numerator_expr = expression.numerator
+            denominator_expr = expression.denominator
+        else:
             return self._arithmetic_engine.normalize(expression)
 
-        num = self.normalize(expression.left)
-        den = self.normalize(expression.right)
+        num = self.normalize(numerator_expr)
+        den = self.normalize(denominator_expr)
 
         # Sign normalization
         if isinstance(den, ast.Neg):
@@ -51,19 +57,21 @@ class FractionEngine:
             return ast.Div(ast.Int(new_num), ast.Int(new_den))
 
         # Symbolic reduction
-        num_factors = set(self._get_factors(num))
-        den_factors = set(self._get_factors(den))
-        common_factors = num_factors.intersection(den_factors)
+        num_factors = list(self._get_factors(num))
+        den_factors = list(self._get_factors(den))
 
-        if common_factors:
-            new_num_factors = list(num_factors)
-            new_den_factors = list(den_factors)
-            for factor in common_factors:
-                new_num_factors.remove(factor)
-                new_den_factors.remove(factor)
+        if num_factors and den_factors:
+            remaining_den_factors = den_factors.copy()
+            reduced_num_factors: list[ast.Expr] = []
+            for factor in num_factors:
+                if factor in remaining_den_factors:
+                    remaining_den_factors.remove(factor)
+                else:
+                    reduced_num_factors.append(factor)
 
-            num = self._reconstruct_mul(new_num_factors)
-            den = self._reconstruct_mul(new_den_factors)
+            if len(reduced_num_factors) != len(num_factors) or len(remaining_den_factors) != len(den_factors):
+                num = self._reconstruct_mul(reduced_num_factors)
+                den = self._reconstruct_mul(remaining_den_factors)
 
         # After symbolic reduction, try integer reduction again
         if isinstance(num, ast.Int) and isinstance(den, ast.Int):
@@ -119,6 +127,8 @@ class FractionEngine:
         """Returns the numerator and denominator of an expression."""
         if isinstance(expr, ast.Div):
             return expr.left, expr.right
+        if isinstance(expr, ast.RationalNode):
+            return expr.numerator, expr.denominator
         return expr, ast.Int(1)
 
     def _get_factors(self, expr: ast.Expr) -> List[ast.Expr]:
@@ -138,4 +148,3 @@ class FractionEngine:
     def _gcd(self, a: int, b: int) -> int:
         """Computes the greatest common divisor of two integers."""
         return math.gcd(a, b)
-

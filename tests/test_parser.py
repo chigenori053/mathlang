@@ -1,93 +1,42 @@
 import pytest
-from core.parser import Parser, ParserError
-from core.ast_nodes import (
-    Program,
-    Problem,
-    PrepareNode,
-    Step,
-    Assignment,
-    Int,
-    Sym,
-    Add,
-    Mul,
-    Div,
-)
-from core.i18n import get_language_pack
 
-def test_parse_simple_problem():
-    source = """
-    problem MyProblem
-        step:
-            1 + 1 = 2
-    end
-    """
-    parser = Parser(source)
-    program = parser.parse()
-    assert len(program.statements) == 1
-    problem = program.statements[0]
-    assert isinstance(problem, Problem)
-    assert problem.name == "MyProblem"
-    assert problem.prepare is None
-    assert len(problem.steps) == 1
-    step = problem.steps[0]
-    assert isinstance(step, Step)
-    assert step.before == Add(terms=[Int(1), Int(1)])
-    assert step.after == Int(2)
+from core.parser import Parser
+from core import ast_nodes as ast
+from core.errors import SyntaxError
 
-def test_parse_problem_with_prepare():
-    source = """
-    problem WithPrepare
-        prepare:
-            x = 1
-            y = 2
-        step:
-            x + y = 3
-    end
-    """
-    parser = Parser(source)
-    program = parser.parse()
-    problem = program.statements[0]
-    assert isinstance(problem, Problem)
-    assert problem.name == "WithPrepare"
-    assert isinstance(problem.prepare, PrepareNode)
-    assert len(problem.prepare.assignments) == 2
-    assert problem.prepare.assignments[0] == Assignment(target="x", expression=Int(1))
-    assert len(problem.steps) == 1
-    step = problem.steps[0]
-    assert step.before == Add(terms=[Sym("x"), Sym("y")])
-    assert step.after == Int(3)
+def test_parser_builds_nodes_with_line_numbers():
+    source = """# comment
 
-def test_parse_multiple_steps():
-    source = """
-    problem MultiStep
-        step:
-            2 * 3 = 6
-        step:
-            6 / 2 = 3
-    end
-    """
-    parser = Parser(source)
-    program = parser.parse()
-    problem = program.statements[0]
-    assert len(problem.steps) == 2
-    assert problem.steps[0].before == Mul(factors=[Int(2), Int(3)])
-    assert problem.steps[1].before == Div(left=Int(6), right=Int(2))
+problem: (x + 1) * (x + 2)
+step1: x^2 + 3*x + 2
+explain: "expansion"
+end: x^2 + 3*x + 2
+"""
+    program = Parser(source).parse()
+    assert isinstance(program, ast.ProgramNode)
+    assert len(program.body) == 4
 
-def test_parser_error_on_missing_end():
-    source = """
-    problem MissingEnd
-        step: 1 = 1
-    """
-    parser = Parser(source)
-    with pytest.raises(ParserError, match="Expected 'end' to close problem block"):
-        parser.parse()
+    problem = program.body[0]
+    assert isinstance(problem, ast.ProblemNode)
+    assert problem.expr == "(x + 1) * (x + 2)"
+    assert problem.line == 3
 
-def test_parser_error_on_bad_step():
-    source = """
-    problem BadStep
-        step: 1 +
-    end
-    """
-    parser = Parser(source)
-    with pytest.raises(ParserError, match="Unexpected token"):
-        parser.parse()
+    step = program.body[1]
+    assert isinstance(step, ast.StepNode)
+    assert step.step_id == "1"
+    assert step.expr == "x^2 + 3*x + 2"
+
+    explain = program.body[2]
+    assert isinstance(explain, ast.ExplainNode)
+    assert explain.text == "expansion"
+
+    end = program.body[3]
+    assert isinstance(end, ast.EndNode)
+    assert end.expr == "x^2 + 3*x + 2"
+
+
+def test_parser_requires_problem_and_end():
+    with pytest.raises(SyntaxError):
+        Parser("step: 1 = 1").parse()
+    with pytest.raises(SyntaxError):
+        Parser("problem: 1 = 1").parse()

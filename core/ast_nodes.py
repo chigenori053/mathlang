@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Union
+from typing import Iterator, List, Sequence, Union
 
 # Core Expression Types
 @dataclass(frozen=True)
@@ -111,3 +111,46 @@ def iter_child_nodes(node: Expr) -> Iterator[Expr]:
 def child_nodes(node: Expr) -> Sequence[Expr]:
     """Return the tuple of children for easier inspection/testing."""
     return tuple(iter_child_nodes(node))
+
+
+# ---------------------------------------------------------------------------
+# DSL Node definitions (MathLang Core v2 specification)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Node:
+    line: int | None = None
+
+
+@dataclass
+class ProgramNode(Node):
+    body: List[Node] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.body is None:
+            self.body = []
+
+
+@dataclass
+class ProblemNode(Node):
+    expr: str = ""
+    ast: object | None = None
+
+
+@dataclass
+class StepNode(Node):
+    step_id: str | None = None
+    expr: str = ""
+    ast: object | None = None
+
+
+@dataclass
+class EndNode(Node):
+    expr: str | None = None
+    is_done: bool = False
+    ast: object | None = None
+
+
+@dataclass
+class ExplainNode(Node):
+    text: str = ""

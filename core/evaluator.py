@@ -1,342 +1,211 @@
-"""Stepwise evaluator for the MathLang AST."""
+"""Evaluator and engine implementations for MathLang Core."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from fractions import Fraction
-from typing import Dict, Generator, Iterable, List, Optional, Set
+from typing import List, Optional
 
 from . import ast_nodes as ast
-from .arithmetic_engine import ArithmeticEngine
-from .fraction_engine import FractionEngine
-from .i18n import LanguagePack, get_language_pack
-from .logging import LearningLogger
-from .knowledge import KnowledgeRegistry, KnowledgeNode
+from .errors import InconsistentEndError, InvalidStepError, MissingProblemError
+from .learning_logger import LearningLogger
+from .symbolic_engine import SymbolicEngine
+from .knowledge_registry import KnowledgeRegistry
+from .fuzzy.judge import FuzzyJudge
+from .fuzzy.types import NormalizedExpr
 
 
-class EvaluationError(RuntimeError):
-    """Raised when evaluation cannot proceed due to invalid state."""
+class Engine:
+    """Abstract engine interface."""
+
+    def set(self, expr: str) -> None:  # pragma: no cover - documentation guard
+        raise NotImplementedError
+
+    def check_step(self, expr: str) -> dict:  # pragma: no cover - documentation guard
+        raise NotImplementedError
+
+    def finalize(self, expr: str | None) -> dict:  # pragma: no cover - documentation guard
+        raise NotImplementedError
+
 
 @dataclass
-class EvaluationResult:
-    step_number: int
-    message: str
+class SymbolicEvaluationEngine(Engine):
+    """Concrete engine that relies on SymbolicEngine and KnowledgeRegistry."""
+
+    symbolic_engine: SymbolicEngine
+    knowledge_registry: KnowledgeRegistry | None = None
+
+    def __post_init__(self) -> None:
+        self._current_expr: str | None = None
+
+    def set(self, expr: str) -> None:
+        self._current_expr = expr
+
+    def check_step(self, expr: str) -> dict:
+        if self._current_expr is None:
+            raise MissingProblemError("Problem expression must be set before steps.")
+        before = self._current_expr
+        valid = self.symbolic_engine.is_equiv(before, expr)
+        rule_id: str | None = None
+        if valid and self.knowledge_registry is not None:
+            matched = self.knowledge_registry.match(before, expr)
+            rule_id = matched.id if matched else None
+        details = {"explanation": self.symbolic_engine.explain(before, expr)}
+        result = {
+            "before": before,
+            "after": expr,
+            "valid": valid,
+            "rule_id": rule_id,
+            "details": details,
+        }
+        if valid:
+            self._current_expr = expr
+        return result
+
+    def finalize(self, expr: str | None) -> dict:
+        if self._current_expr is None:
+            raise MissingProblemError("Cannot finalize before a problem is declared.")
+        target = expr if expr is not None else self._current_expr
+        valid = self.symbolic_engine.is_equiv(self._current_expr, target)
+        details = {"explanation": self.symbolic_engine.explain(self._current_expr, target)}
+        return {
+            "before": self._current_expr,
+            "after": target,
+            "valid": valid,
+            "rule_id": None,
+            "details": details,
+        }
+
 
 class Evaluator:
-    """Evaluates a MathLang program by processing problem blocks."""
+    """Process a ProgramNode using the specified engine."""
 
     def __init__(
         self,
-        program: ast.Program,
-        language: LanguagePack | None = None,
+        program: ast.ProgramNode,
+        engine: Engine,
         learning_logger: LearningLogger | None = None,
-    ):
+        fuzzy_judge: FuzzyJudge | None = None,
+    ) -> None:
         self.program = program
-        self.global_expressions: Dict[str, ast.Expr] = {}
-        self._step_count = 0
-        self._language = language or get_language_pack("en")
-        self._learning_logger = learning_logger
-        self._arithmetic_engine = ArithmeticEngine()
-        self._fraction_engine = FractionEngine()
+        self.engine = engine
+        self.learning_logger = learning_logger or LearningLogger()
+        self._fuzzy_judge = fuzzy_judge
+        self._state = "INIT"
+        self._completed = False
+        self._current_problem_expr: str | None = None
+        self._last_expr_raw: str | None = None
 
-    def run(self) -> List[EvaluationResult]:
-        results = []
-        for statement in self.program.statements:
-            results.extend(list(self._execute_statement(statement)))
-        return results
+    def run(self) -> List[dict]:
+        for node in self.program.body:
+            if isinstance(node, ast.ProblemNode):
+                self._handle_problem(node)
+            elif isinstance(node, ast.StepNode):
+                self._handle_step(node)
+            elif isinstance(node, ast.EndNode):
+                self._handle_end(node)
+            elif isinstance(node, ast.ExplainNode):
+                self._handle_explain(node)
+            else:  # pragma: no cover - defensive block.
+                raise SyntaxError(f"Unsupported node type: {type(node)}")
+        if self._state != "END":
+            raise MissingProblemError("Program did not reach an end statement.")
+        self._completed = True
+        return self.learning_logger.to_list()
 
-    def _execute_statement(self, statement: ast.Statement) -> Iterable[EvaluationResult]:
-        if isinstance(statement, ast.Problem):
-            yield from self._evaluate_problem(statement)
+    def _handle_problem(self, node: ast.ProblemNode) -> None:
+        if self._state != "INIT":
+            raise MissingProblemError("Problem already defined.")
+        self.engine.set(node.expr)
+        self._current_problem_expr = node.expr
+        self._last_expr_raw = node.expr
+        self.learning_logger.record(
+            phase="problem",
+            expression=node.expr,
+            rendered=f"Problem: {node.expr}",
+            status="ok",
+        )
+        self._state = "PROBLEM_SET"
+
+    def _handle_step(self, node: ast.StepNode) -> None:
+        if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
+            raise MissingProblemError("step declared before problem.")
+        result = self.engine.check_step(node.expr)
+        status = "ok" if result["valid"] else "error"
+        self.learning_logger.record(
+            phase="step",
+            expression=node.expr,
+            rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
+            status=status,
+            rule_id=result.get("rule_id"),
+            meta=result.get("details", {}),
+        )
+        if result["valid"]:
+            self._last_expr_raw = node.expr
+            self._state = "STEP_RUN"
             return
 
-        if isinstance(statement, ast.Assignment):
-            # This logic is for global-level assignments
-            normalized_expr = self._normalize_expression(statement.expression)
-            self.global_expressions[statement.target] = normalized_expr
-            self._step_count += 1
-            try:
-                value = self._evaluate_numeric(normalized_expr, self.global_expressions)
-                message = f"Global assignment: {statement.target} = {self._format_expression(normalized_expr)} (value: {value})"
-            except EvaluationError as e:
-                message = f"Global assignment: {statement.target} = {self._format_expression(normalized_expr)} (Error: {e})"
-                raise e # Re-raise the error to propagate it to the main function
-            yield EvaluationResult(self._step_count, message)
+        self._run_fuzzy_judge(
+            previous_expr=self._last_expr_raw or "",
+            candidate_expr=node.expr,
+            applied_rule_id=result.get("rule_id"),
+        )
+        raise InvalidStepError(f"Step is not equivalent: {node.expr}")
+
+    def _handle_end(self, node: ast.EndNode) -> None:
+        if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
+            raise MissingProblemError("end declared before problem.")
+        result = self.engine.finalize(node.expr)
+        if not result["valid"]:
+            raise InconsistentEndError("Final expression does not match expected result.")
+        rendered = "End: done" if node.is_done else f"End: {node.expr}"
+        self.learning_logger.record(
+            phase="end",
+            expression=node.expr if not node.is_done else None,
+            rendered=rendered,
+            status="ok",
+            meta=result.get("details", {}),
+        )
+        self._state = "END"
+        self._last_expr_raw = node.expr if not node.is_done else self._last_expr_raw
+
+    def _handle_explain(self, node: ast.ExplainNode) -> None:
+        if self._state == "INIT":
+            raise MissingProblemError("Explain cannot appear before problem.")
+        self.learning_logger.record(
+            phase="explain",
+            expression=None,
+            rendered=node.text,
+            status="ok",
+        )
+
+    def _run_fuzzy_judge(
+        self,
+        *,
+        previous_expr: str,
+        candidate_expr: str,
+        applied_rule_id: str | None,
+    ) -> None:
+        if self._fuzzy_judge is None or self._current_problem_expr is None:
             return
-
-        if isinstance(statement, ast.Show):
-            if statement.identifier not in self.global_expressions:
-                raise EvaluationError(f"Unknown global identifier '{statement.identifier}'")
-            expr = self.global_expressions[statement.identifier]
-            self._step_count += 1
-            message = f"Show: {statement.identifier} → {self._format_expression(expr)}"
-            yield EvaluationResult(self._step_count, message)
-            return
-                
-        raise EvaluationError(f"Unsupported statement type: {type(statement)}")
-
-    def _evaluate_numeric(self, expression: ast.Expr, context: Dict[str, ast.Expr]) -> int | float | Fraction:
-        # First, substitute any symbols in the expression
-        substituted_expr = self._substitute_identifiers(expression, context)
-
-        if isinstance(substituted_expr, ast.Int):
-            return substituted_expr.value
-        elif isinstance(substituted_expr, ast.Rat):
-            return Fraction(substituted_expr.numerator, substituted_expr.denominator)
-        elif isinstance(substituted_expr, ast.Neg):
-            return -self._evaluate_numeric(substituted_expr.expr, context)
-        elif isinstance(substituted_expr, ast.Add):
-            return sum(self._evaluate_numeric(term, context) for term in substituted_expr.terms)
-        elif isinstance(substituted_expr, ast.Mul):
-            product = 1
-            for factor in substituted_expr.factors:
-                product *= self._evaluate_numeric(factor, context)
-            return product
-        elif isinstance(substituted_expr, ast.Div):
-            numerator = self._evaluate_numeric(substituted_expr.left, context)
-            denominator = self._evaluate_numeric(substituted_expr.right, context)
-            if denominator == 0:
-                raise EvaluationError("Division by zero")
-            return Fraction(numerator, denominator)
-        elif isinstance(substituted_expr, ast.Pow):
-            base = self._evaluate_numeric(substituted_expr.base, context)
-            exp = self._evaluate_numeric(substituted_expr.exp, context)
-            return base ** exp
-        else:
-            raise EvaluationError(f"Cannot evaluate non-numeric expression: {type(substituted_expr)}")
-
-    def _evaluate_problem(self, problem: ast.Problem) -> Iterable[EvaluationResult]:
-
-        self._step_count += 1
-
-        yield EvaluationResult(self._step_count, f"Problem: {problem.name}")
-
-
-
-        local_expressions = self.global_expressions.copy()
-
-        if problem.prepare:
-
-            for assignment in problem.prepare.assignments:
-
-                # Note: Normalization during prepare is not specified, but could be added.
-
-                local_expressions[assignment.target] = assignment.expression
-
-                self._step_count += 1
-
-                yield EvaluationResult(self._step_count, f"  Prepare: {assignment.target} = {self._format_expression(assignment.expression)}")
-
-
-
-        for i, step in enumerate(problem.steps):
-            self._step_count += 1
-            
-            # Substitute variables from the local context
-            before_sub = self._substitute_identifiers(step.before, local_expressions)
-            after_sub = self._substitute_identifiers(step.after, local_expressions)
-
-            # Normalize the 'before' side
-            normalized_before = self._normalize_expression(before_sub)
-
-            # Check for equivalence
-            try:
-                numeric_before = self._evaluate_numeric(normalized_before, local_expressions)
-                numeric_after = self._evaluate_numeric(after_sub, local_expressions)
-                if numeric_before == numeric_after:
-                    status = "Verified"
-                else:
-                    status = f"Failed: Expected {numeric_before}, got {numeric_after}"
-            except EvaluationError as e:
-                status = f"Error during evaluation: {e}"
-
-            message = f"  Step {i+1}: {self._format_expression(step.before)} = {self._format_expression(step.after)} ({status})"
-            yield EvaluationResult(self._step_count, message)
-
-
-
-    def _normalize_expression(self, expression: ast.Expr) -> ast.Expr:
-
-        if isinstance(expression, (ast.Int, ast.Rat)):
-
-            return expression
-
-        if isinstance(expression, ast.Sym):
-
-            # Substitution should be handled before normalization
-
-            return expression
-
-
-
-        if isinstance(expression, ast.Neg):
-
-            return self._arithmetic_engine.normalize(ast.Neg(self._normalize_expression(expression.expr)))
-
-
-
-        if isinstance(expression, ast.Add):
-
-            normalized_terms = [self._normalize_expression(term) for term in expression.terms]
-
-            if any(self._contains_division(t) for t in normalized_terms):
-
-                result = normalized_terms[0]
-
-                for i in range(1, len(normalized_terms)):
-
-                    result = self._fraction_engine.add(result, normalized_terms[i])
-
-                return result
-
-            return self._arithmetic_engine.normalize(ast.Add(terms=normalized_terms))
-
-
-
-        if isinstance(expression, ast.Mul):
-
-            normalized_factors = [self._normalize_expression(factor) for factor in expression.factors]
-
-            if any(self._contains_division(f) for f in normalized_factors):
-
-                result = normalized_factors[0]
-
-                for i in range(1, len(normalized_factors)):
-
-                    result = self._fraction_engine.multiply(result, normalized_factors[i])
-
-                return result
-
-            return self._arithmetic_engine.normalize(ast.Mul(factors=normalized_factors))
-
-
-
-        if isinstance(expression, ast.Pow):
-
-            base = self._normalize_expression(expression.base)
-
-            exp = self._normalize_expression(expression.exp)
-
-            return self._arithmetic_engine.normalize(ast.Pow(base, exp))
-
-
-
-        if isinstance(expression, ast.Div):
-
-            left = self._normalize_expression(expression.left)
-
-            right = self._normalize_expression(expression.right)
-
-            return self._fraction_engine.normalize(ast.Div(left, right))
-
-
-
-        return expression
-
-    
-
-    def _contains_division(self, expression: ast.Expr) -> bool:
-
-        if isinstance(expression, ast.Div):
-
-            return True
-
-        if isinstance(expression, ast.Neg):
-
-            return self._contains_division(expression.expr)
-
-        if isinstance(expression, (ast.Add, ast.Mul)):
-
-            children = expression.terms if isinstance(expression, ast.Add) else expression.factors
-
-            return any(self._contains_division(child) for child in children)
-
-        if isinstance(expression, ast.Pow):
-
-            return self._contains_division(expression.base) or self._contains_division(expression.exp)
-
-        return False
-
-
-
-    def _substitute_identifiers(self, expression: ast.Expr, context: Dict[str, ast.Expr], _visited: Optional[Set[str]] = None) -> ast.Expr:
-
-        visited = _visited or set()
-
-        if isinstance(expression, ast.Sym):
-
-            if expression.name in visited:
-
-                raise EvaluationError(f"Circular dependency for '{expression.name}'")
-
-            if expression.name in context:
-
-                visited.add(expression.name)
-
-                return self._substitute_identifiers(context[expression.name], context, visited)
-
-        
-
-        if isinstance(expression, ast.Neg):
-
-            return ast.Neg(self._substitute_identifiers(expression.expr, context, visited))
-
-        if isinstance(expression, ast.Add):
-
-            return ast.Add([self._substitute_identifiers(t, context, visited) for t in expression.terms])
-
-        if isinstance(expression, ast.Mul):
-
-            return ast.Mul([self._substitute_identifiers(f, context, visited) for f in expression.factors])
-
-        if isinstance(expression, ast.Pow):
-
-            return ast.Pow(self._substitute_identifiers(expression.base, context, visited), self._substitute_identifiers(expression.exp, context, visited))
-
-        if isinstance(expression, ast.Div):
-
-            return ast.Div(self._substitute_identifiers(expression.left, context, visited), self._substitute_identifiers(expression.right, context, visited))
-
-        
-
-        return expression
-
-
-
-    @staticmethod
-
-    def _format_expression(expression: ast.Expr) -> str:
-
-        if isinstance(expression, ast.Int):
-
-            return str(expression.value)
-
-        if isinstance(expression, ast.Sym):
-
-            return expression.name
-
-        if isinstance(expression, ast.Neg):
-
-            if isinstance(expression.expr, ast.Add):
-
-                return f"-({Evaluator._format_expression(expression.expr)})"
-
-            return f"-{Evaluator._format_expression(expression.expr)}"
-
-        if isinstance(expression, ast.Add):
-
-            return " + ".join(Evaluator._format_expression(term) for term in expression.terms).replace(" + -", " - ")
-
-        if isinstance(expression, ast.Mul):
-
-            return " * ".join(Evaluator._format_expression(factor) for factor in expression.factors)
-
-        if isinstance(expression, ast.Pow):
-
-            return f"({Evaluator._format_expression(expression.base)})^({Evaluator._format_expression(expression.exp)})"
-
-        if isinstance(expression, ast.Div):
-
-            return f"({Evaluator._format_expression(expression.left)}) / ({Evaluator._format_expression(expression.right)})"
-
-        return repr(expression)
+        normalized_problem = self._normalized_expr(self._current_problem_expr)
+        normalized_prev = self._normalized_expr(previous_expr)
+        normalized_candidate = self._normalized_expr(candidate_expr)
+        fuzzy_result = self._fuzzy_judge.judge_step(
+            problem_expr=normalized_problem,
+            previous_expr=normalized_prev,
+            candidate_expr=normalized_candidate,
+            applied_rule_id=applied_rule_id,
+            candidate_rule_id=None,
+            explain_text=None,
+        )
+        self.learning_logger.record(
+            phase="fuzzy",
+            expression=candidate_expr,
+            rendered=f"Fuzzy: {fuzzy_result['label'].value} ({fuzzy_result['score']['combined_score']:.2f})",
+            status="info",
+            meta=fuzzy_result,
+        )
+
+    def _normalized_expr(self, expr: str) -> NormalizedExpr:
+        tokens = expr.split()
+        return {"raw": expr, "sympy": expr, "tokens": tokens}
