@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, List
 
 from . import ast_nodes as ast
 from .errors import SyntaxError
@@ -26,18 +26,63 @@ class Parser:
 
     def parse(self) -> ast.ProgramNode:
         nodes: list[ast.Node] = []
-        for parsed in self._normalized_lines():
-            content = parsed.content
-            if content.startswith("problem:"):
-                nodes.append(self._parse_problem(content, parsed.number))
-            elif content.startswith("step"):
-                nodes.append(self._parse_step(content, parsed.number))
-            elif content.startswith("end:"):
-                nodes.append(self._parse_end(content, parsed.number))
-            elif content.startswith("explain:"):
-                nodes.append(self._parse_explain(content, parsed.number))
+        index = 0
+        while index < len(self._lines):
+            parsed = self._lines[index]
+            raw = parsed.content
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                index += 1
+                continue
+            keyword, tail, rest, has_colon = self._extract_keyword_parts(stripped)
+            if keyword == "problem" and has_colon:
+                nodes.append(self._parse_problem(rest.strip(), parsed.number))
+                index += 1
+            elif keyword == "step" and has_colon and rest.strip():
+                nodes.append(self._parse_step_legacy(rest.strip(), tail or None, parsed.number))
+                index += 1
+            elif keyword == "step" and has_colon:
+                block_lines, index = self._collect_block(index + 1)
+                nodes.append(self._parse_step_block(block_lines, parsed.number))
+            elif keyword == "end" and has_colon:
+                nodes.append(self._parse_end(rest.strip(), parsed.number))
+                index += 1
+            elif keyword == "explain" and has_colon:
+                nodes.append(self._parse_explain(rest.strip(), parsed.number))
+                index += 1
+            elif keyword == "meta" and has_colon:
+                block_lines, index = self._collect_block(index + 1)
+                nodes.append(
+                    ast.MetaNode(line=parsed.number, data=self._parse_mapping(block_lines))
+                )
+            elif keyword == "config" and has_colon:
+                block_lines, index = self._collect_block(index + 1)
+                nodes.append(
+                    ast.ConfigNode(
+                        line=parsed.number,
+                        options=self._parse_config_options(self._parse_mapping(block_lines)),
+                    )
+                )
+            elif keyword == "mode" and has_colon:
+                mode_value = rest.strip() or "strict"
+                nodes.append(ast.ModeNode(line=parsed.number, mode=mode_value))
+                index += 1
+            elif keyword == "prepare" and has_colon:
+                block_lines, index = self._collect_block(index + 1)
+                nodes.append(ast.PrepareNode(line=parsed.number, statements=self._parse_prepare(block_lines)))
+            elif keyword == "counterfactual" and has_colon:
+                block_lines, index = self._collect_block(index + 1)
+                cf_data = self._parse_mapping(block_lines)
+                assume = {k: str(v) for k, v in (cf_data.get("assume") or {}).items()}
+                nodes.append(
+                    ast.CounterfactualNode(
+                        line=parsed.number,
+                        assume=assume,
+                        expect=(cf_data.get("expect") if isinstance(cf_data.get("expect"), str) else None),
+                    )
+                )
             else:
-                raise SyntaxError(f"Unsupported statement on line {parsed.number}: {content}")
+                raise SyntaxError(f"Unsupported statement on line {parsed.number}: {raw.strip()}")
 
         program = ast.ProgramNode(line=None, body=nodes)
         if not any(isinstance(node, ast.ProblemNode) for node in nodes):
@@ -46,40 +91,40 @@ class Parser:
             raise SyntaxError("Program must contain at least one end statement.")
         return program
 
-    def _normalized_lines(self) -> Iterable[ParsedLine]:
-        for parsed in self._lines:
-            stripped = parsed.content.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            yield ParsedLine(parsed.number, stripped)
-
     def _parse_problem(self, content: str, number: int) -> ast.ProblemNode:
-        expr = content[len("problem:") :].strip()
+        expr = content.strip()
         if not expr:
             raise SyntaxError(f"Problem expression required on line {number}.")
         return ast.ProblemNode(expr=expr, line=number)
 
-    def _parse_step(self, content: str, number: int) -> ast.StepNode:
-        prefix, sep, rest = content.partition(":")
-        if not sep:
-            raise SyntaxError(f"Missing ':' for step on line {number}.")
-        tail = prefix[len("step") :].strip()
-        step_id = tail if tail else None
-        expr = rest.strip()
+    def _parse_step_legacy(self, content: str, step_id: str | None, number: int) -> ast.StepNode:
+        expr = content.strip()
         if not expr:
             raise SyntaxError(f"Step expression required on line {number}.")
         return ast.StepNode(step_id=step_id, expr=expr, line=number)
 
+    def _parse_step_block(self, block_lines: List[str], number: int) -> ast.StepNode:
+        data = self._parse_mapping(block_lines)
+        after = data.get("after")
+        before = data.get("before")
+        note = data.get("note")
+        if not isinstance(after, str) or not after.strip():
+            raise SyntaxError(f"Step block missing 'after' expression near line {number}.")
+        node = ast.StepNode(expr=after.strip(), line=number)
+        if isinstance(before, str):
+            node.before_expr = before.strip()
+        if isinstance(note, str):
+            node.note = note.strip()
+        return node
+
     def _parse_end(self, content: str, number: int) -> ast.EndNode:
-        expr_text = content[len("end:") :].strip()
-        if not expr_text:
-            raise SyntaxError(f"End expression required on line {number}.")
-        if expr_text.lower() == "done":
+        expr_text = content.strip()
+        if not expr_text or expr_text.lower() == "done":
             return ast.EndNode(expr=None, is_done=True, line=number)
         return ast.EndNode(expr=expr_text, is_done=False, line=number)
 
     def _parse_explain(self, content: str, number: int) -> ast.ExplainNode:
-        raw_text = content[len("explain:") :].strip()
+        raw_text = content.strip()
         if not raw_text:
             raise SyntaxError(f"Explain statement requires a string literal on line {number}.")
         text = self._strip_string_literal(raw_text, number)
@@ -89,3 +134,108 @@ class Parser:
         if len(literal) < 2 or literal[0] not in {'"', "'"} or literal[-1] != literal[0]:
             raise SyntaxError(f"Explain statement requires a quoted string on line {number}.")
         return literal[1:-1]
+
+    def _extract_keyword_parts(self, stripped: str) -> tuple[str, str, str, bool]:
+        leading, sep, rest = stripped.partition(":")
+        if not sep:
+            return leading.lower(), "", "", False
+        keyword_part = leading.strip()
+        if not keyword_part:
+            return "", "", rest, True
+        lower_part = keyword_part.lower()
+        if lower_part.startswith("step"):
+            base = "step"
+            tail = keyword_part[len("step") :].strip()
+        else:
+            base_segment = keyword_part.split()[0]
+            base = base_segment.lower()
+            tail = keyword_part[len(base_segment) :].strip()
+        return base, tail, rest, True
+
+    def _collect_block(self, start_index: int) -> tuple[List[str], int]:
+        block: List[str] = []
+        index = start_index
+        while index < len(self._lines):
+            raw = self._lines[index].content
+            stripped = raw.strip()
+            if not raw.startswith(" ") and stripped and not stripped.startswith("#"):
+                break
+            if not raw.strip() and not raw.startswith(" "):
+                break
+            block.append(raw)
+            index += 1
+        return block, index
+
+    def _parse_mapping(self, block_lines: List[str]) -> dict:
+        result: dict = {}
+        index = 0
+        while index < len(block_lines):
+            raw = block_lines[index]
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                index += 1
+                continue
+            indent = len(raw) - len(raw.lstrip(" "))
+            if ":" not in stripped:
+                index += 1
+                continue
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if not value:
+                nested_lines, new_index = self._collect_nested_lines(block_lines, index + 1, indent)
+                result[key] = self._parse_mapping(nested_lines) if nested_lines else {}
+                index = new_index
+            else:
+                result[key] = value
+                index += 1
+        return result
+
+    def _collect_nested_lines(self, block_lines: List[str], start: int, base_indent: int) -> tuple[List[str], int]:
+        nested: List[str] = []
+        index = start
+        while index < len(block_lines):
+            raw = block_lines[index]
+            stripped = raw.strip()
+            if not stripped:
+                nested.append(raw)
+                index += 1
+                continue
+            indent = len(raw) - len(raw.lstrip(" "))
+            if indent <= base_indent:
+                break
+            nested.append(raw)
+            index += 1
+        return nested, index
+
+    def _parse_prepare(self, block_lines: List[str]) -> List[str]:
+        statements: List[str] = []
+        for raw in block_lines:
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("-"):
+                statements.append(stripped[1:].strip())
+        return statements
+
+    def _parse_config_options(self, data: dict) -> dict:
+        options: dict = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                options[key] = value
+            elif isinstance(value, str):
+                options[key] = self._parse_scalar(value)
+            else:
+                options[key] = value
+        return options
+
+    def _parse_scalar(self, value: str) -> object:
+        lower = value.lower()
+        if lower in {"true", "false"}:
+            return lower == "true"
+        try:
+            if "." in value:
+                return float(value)
+            return int(value)
+        except ValueError:
+            return value

@@ -1,8 +1,8 @@
 """AST node definitions for the MathLang DSL."""
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Iterator, List, Sequence, Union
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterator, List, Sequence, Union
 
 # Core Expression Types
 @dataclass(frozen=True)
@@ -142,6 +142,8 @@ class StepNode(Node):
     step_id: str | None = None
     expr: str = ""
     ast: object | None = None
+    before_expr: str | None = None
+    note: str | None = None
 
 
 @dataclass
@@ -154,3 +156,29 @@ class EndNode(Node):
 @dataclass
 class ExplainNode(Node):
     text: str = ""
+
+
+@dataclass
+class MetaNode(Node):
+    data: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class ConfigNode(Node):
+    options: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ModeNode(Node):
+    mode: str = "strict"
+
+
+@dataclass
+class PrepareNode(Node):
+    statements: List[str] = field(default_factory=list)
+
+
+@dataclass
+class CounterfactualNode(Node):
+    assume: Dict[str, str] = field(default_factory=dict)
+    expect: str | None = None
