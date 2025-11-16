@@ -17,7 +17,7 @@
 
 ### 完了タスク
 - CORE-01: 実データ（`docs/data/fuzzy_samples.json`）を用いた KnowledgeRegistry/FuzzyJudge の検証
-- CORE-02: `examples/counterfactual_demo.mlang` ＋ CLI `--counterfactual` による介入デモ
+- CORE-02: `edu/examples/counterfactual_demo.mlang` ＋ CLI `--counterfactual` による介入デモ
 - CORE-03: `graph_to_text/dot` を CLI / Notebook デモに統合
 - CORE-04: `docs/demo/counterfactual_walkthrough.md` などデモ資料整備
 - CORE-05: README / Spec / Test Plan などドキュメント同期

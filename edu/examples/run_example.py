@@ -6,7 +6,7 @@ from pathlib import Path
 
 from core.evaluator import Evaluator
 from core.i18n import get_language_pack
-from core.parser import Parser
+from edu.dsl import EduParser
 
 
 EXAMPLE_PATH = Path(__file__).with_name("pythagorean.mlang")
@@ -15,7 +15,7 @@ EXAMPLE_PATH = Path(__file__).with_name("pythagorean.mlang")
 def main() -> None:
     source = EXAMPLE_PATH.read_text(encoding="utf-8")
     language = get_language_pack()
-    program = Parser(source, language=language).parse()
+    program = EduParser(source).parse()
     evaluator = Evaluator(program, language=language)
     step_label = language.text("cli.step_label")
 

@@ -79,7 +79,7 @@
 ### 進行中
 | ID | フェーズ | カテゴリ | タスク概要 | 完了条件 | 担当 | 優先度 | 状態 | 期限 | 備考/依存 |
 |----|----------|----------|------------|----------|------|--------|-------|------|------------|
-| P3-01 | Phase 3 | UI | JupyterLabデモノートブック | `examples/`配下にデモNotebookと手順書を配置 | TBD | H | 進行中 | 2025-12-20 | `notebooks/Learning_Log_Demo.ipynb`初版と`examples/` CLIサンプルあり。UI磨き込みと手順書更新を継続。 |
+| P3-01 | Phase 3 | UI | JupyterLabデモノートブック | `edu/examples/`配下にデモNotebookと手順書を配置 | TBD | H | 進行中 | 2025-12-20 | `notebooks/Learning_Log_Demo.ipynb`初版と`edu/examples/` CLIサンプルあり。UI磨き込みと手順書更新を継続。 |
 | P3-02 | Phase 3 | 学習ログ | 学習ログ導出API | 評価過程をJSONログに保存する`Evaluator`拡張 | TBD | L | 進行中 | 2025-12-22 | `core/logging.py`の`LearningLogger`と`core/evaluator.py`連携済。ファイル永続化とCLIフラグ未提供。 |
 
 ### 完了
@@ -88,13 +88,13 @@
 | P1-02 | Phase 1 | AST | ASTノード定義の整理 | `core/ast_nodes.py`に主要statement/expressionノードを網羅 | TBD | M | 完了 | 2025-11-05 | v1仕様に合わせて`ast.Program`/`ast.Step`等を再定義済。 |
 | P1-03 | Phase 1 | Evaluator | ステップ実行とログ出力 | `core/evaluator.py`が実行順ログを生成、簡単なサンプルで再現性保証 | TBD | H | 完了 | 2025-11-10 | `Evaluator.run()`で一貫した`EvaluationResult`が得られ、`tests/test_evaluator.py`で検証。 |
 | P1-04 | Phase 1 | テスト | Parser/Evaluator向けpytest整備 | `tests/test_parser.py`と`tests/test_evaluator.py`が主要ケースを網羅しCI緑 | TBD | H | 完了 | 2025-11-12 | `uv run pytest`でParser/Evaluator計41ケース成功（2025-11-09時点）。 |
-| P1-05 | Phase 1 | CLI/UX | CLIとExamples整備 | `main.py`でファイル実行でき、`examples/`配下にチュートリアルが存在 | TBD | M | 完了 | 2025-11-15 | CLI `python main.py examples/polynomial_arithmetic.mlang` が動作、READMEにも手順記載。 |
+| P1-05 | Phase 1 | CLI/UX | CLIとExamples整備 | `main.py`でファイル実行でき、`edu/examples/`配下にチュートリアルが存在 | TBD | M | 完了 | 2025-11-15 | CLI `python main.py edu/examples/polynomial_arithmetic.mlang` が動作、READMEにも手順記載。 |
 | P1-06 | Phase 1 | テスト | エラーパスと境界値テスト | division-by-zero/未定義変数/多重unary等の失敗系がpytestで再現 | TBD | M | 完了 | 2025-11-18 | `tests/test_evaluator.py`でゼロ除算/未定義変数/多重unaryを網羅。 |
 | P2-01 | Phase 2 | SymbolicAI | SymPy連携PoC | `core/symbolic_engine.py`で`simplify`/`explain`最小実装、2例以上のテスト付き | TBD | H | 完了 | 2025-12-03 | `tests/test_symbolic_engine.py`と`tests/test_cli.py`でPoC挙動を検証。 |
 | P2-02 | Phase 2 | AST最適化 | AST最適化パス追加 | 冗長演算を統合する最適化が1ケース以上で効果検証 | TBD | M | 完了 | 2025-12-08 | `core/optimizer.py`新設＋`tests/test_optimizer.py`で定数畳み込み/代入展開を検証。 |
 | P2-03 | Phase 2 | SymbolicAI | Evaluator統合＆trace拡張 | Evaluator/CLIからSymbolicEngineを呼び出し`show`出力で簡約結果を提示 | TBD | H | 完了 | 2025-12-05 | `Evaluator(symbolic_engine_factory)`導入、CLI `--symbolic-trace`で統合済。 |
 | P2-04 | Phase 2 | インフラ | SymPy/Jupyter環境整備 | SymPyをCI/開発環境でインストールし`python main.py --symbolic`が実機で成功 | TBD | H | 完了 | 2025-11-25 | `uv`環境でSymPy導入済、CIも`uv run pytest`で成功（2025-11-09）。 |
-| P2-05 | Phase 2 | SymbolicAI | 多項式四則演習スクリプト | CLI/`--polynomial`で演算結果を表示 | TBD | H | 完了 | 2025-12-02 | `examples/polynomial_arithmetic.mlang`＋`tests/test_polynomial.py`/`tests/test_polynomial_scenario.py`で確認。 |
+| P2-05 | Phase 2 | SymbolicAI | 多項式四則演習スクリプト | CLI/`--polynomial`で演算結果を表示 | TBD | H | 完了 | 2025-12-02 | `edu/examples/polynomial_arithmetic.mlang`＋`tests/test_polynomial.py`/`tests/test_polynomial_scenario.py`で確認。 |
 | P2-08 | Phase 2 | リファクタリング | コアエンジンを新アーキテクチャ仕様に準拠 | ast_nodes, parser, evaluator, optimizer等を更新しテストを修正 | TBD | H | 完了 | 2025-11-09 | `core/`各モジュールを`docs/MathLang_Core_Engine_Architecture_v1.md`準拠へ移行済。 |
 
 ## デモ版完成までのプロセス（案）

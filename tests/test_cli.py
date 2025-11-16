@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from main import main
+from pro.cli import main as pro_main
 
 
 def test_cli_hello_world(capsys):
@@ -56,3 +57,17 @@ def test_cli_prints_fuzzy_on_invalid_step(capsys):
     assert result == 1
     assert "Fuzzy:" in captured.out
     assert "Causal Analysis" in captured.out
+
+
+def test_pro_cli_runs_inline_code(capsys):
+    capsys.readouterr()
+    source = textwrap.dedent(
+        """
+        problem: (x + 1) * (x + 2)
+        end: (x + 1) * (x + 2)
+        """
+    )
+    result = pro_main(["-c", source])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Problem" in captured.out

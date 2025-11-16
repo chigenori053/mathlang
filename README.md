@@ -38,11 +38,11 @@ Expected output:
 ```
 
 ## CLI Usage
-- Run a `.mlang` file: `python main.py --file examples/sample.mlang`
+- Run a `.mlang` file: `python main.py --file edu/examples/pythagorean.mlang`
 - Run an inline snippet: `python main.py -c "problem: 1 + 1\nend: 2"`
-- Switch to the polynomial evaluator: `python main.py --mode polynomial --file examples/sample.mlang`
+- Switch to the polynomial evaluator: `python main.py --mode polynomial --file edu/examples/polynomial_arithmetic.mlang`
 - Run the built-in Hello World self-test: `python main.py --hello-world-test`
-- Simulate a counterfactual: `python main.py --file examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`
+- Simulate a counterfactual: `python main.py --file edu/examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`
 
 The CLI prints rendered text for every `problem`, `step`, `explain`, and `end` clause. Symbolic mode verifies steps with SymPy and the knowledge registry, while polynomial mode expands expressions before comparing them.  
 エラーが発生した場合は、収集した LearningLogger レコードを元に因果推論エンジンが解析され、`== Causal Analysis ==` セクションとして推定原因と修正候補ステップが追加表示されます。
@@ -120,7 +120,7 @@ uv add sympy pyyaml pytest
 ### Release Checklist (Snapshot)
 - [ ] Parser/Evaluator tests green (`pytest`).
 - [ ] CLI usage in `README` matches `main.py` behavior for `--file`, `--code`, `--mode`, and `--hello-world-test`.
-- [ ] Examples under `examples/` execute without modification.
+- [ ] Examples under `edu/examples/` (Edu) and `pro/examples/` (Pro) execute without modification.
 - [ ] Symbolic mode verifies steps and prints rendered output.
 - [ ] Polynomial mode expands polynomials and reports matching steps.
 - [ ] `--hello-world-test` prints the expected Hello World trace.

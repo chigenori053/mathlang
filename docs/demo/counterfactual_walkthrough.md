@@ -1,9 +1,9 @@
 # Counterfactual & Causal Analysis Walkthrough
 
-1. `python main.py --file examples/counterfactual_demo.mlang`  
+1. `python main.py --file edu/examples/counterfactual_demo.mlang`  
    - 実行後 `== Causal Analysis ==` セクションで原因ステップと修正候補を確認。
 
-2. `python main.py --file examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`  
+2. `python main.py --file edu/examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`  
    - `== Counterfactual Simulation ==` で置換結果・新しい end 表現を確認。
 
 3. Notebook では以下を実行  

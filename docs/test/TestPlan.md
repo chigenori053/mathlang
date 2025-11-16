@@ -14,7 +14,7 @@
 ### 対象機能
 - `core/polynomial.py` / `core/polynomial_evaluator.py` による多項式演算・正規化処理。
 - `main.py` の `--polynomial` および `--symbolic-trace` オプションを用いた実行結果。
-- `examples/` 配下に作成されるJupyter Notebookデモ。
+- `edu/examples/` 配下に作成されるJupyter Notebookデモ。
 - `Evaluator` からの学習ログ（JSON形式）出力機能。
 
 ### 範囲外
@@ -26,7 +26,7 @@
 |------------|------------|------|
 | **単体テスト** | `pytest` を用いて、関数やクラス単位でロジックの正しさを検証する。 | ・多項式の加減乗除を行う`PolynomialEvaluator`と関連ユーティリティ<br>・学習ログを生成するAPI |
 | **結合テスト** | CLIから `.mlang` ファイルを実行し、各コンポーネント（Parser, Optimizer, Evaluator, SymbolicEngine）が連携して動作することを検証する。 | ・`main.py --symbolic-trace` を使った多項式演習スクリプトの実行 |
-| **シナリオテスト** | Jupyter Notebook上で、エンドユーザーの利用シナリオに沿って一連の操作を行い、システム全体の動作を検証する。 | ・`examples/` のデモノートブック（Hello World, 多項式四則演習） |
+| **シナリオテスト** | Jupyter Notebook上で、エンドユーザーの利用シナリオに沿って一連の操作を行い、システム全体の動作を検証する。 | ・`edu/examples/` のデモノートブック（Hello World, 多項式四則演習） |
 | **環境テスト** | 開発環境およびCI環境で、すべてのテストが成功することを確認する。 | ・`uv` で管理された依存関係<br>・devcontainer, CI環境 |
 
 ## 4. テスト項目
