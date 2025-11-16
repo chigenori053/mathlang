@@ -67,6 +67,39 @@ end: 3
         evaluator.run()
 
 
+def test_evaluator_logs_error_record_for_invalid_step():
+    program = _program_from_source(
+        """
+problem: 1 + 1
+step: 3
+end: done
+"""
+    )
+    logger = LearningLogger()
+    evaluator = Evaluator(program, _engine(), learning_logger=logger)
+    with pytest.raises(InvalidStepError):
+        evaluator.run()
+    errors = [record for record in logger.to_list() if record["phase"] == "error"]
+    assert errors
+    assert errors[-1]["status"] == "invalid_step"
+
+
+def test_evaluator_logs_error_record_for_inconsistent_end():
+    program = _program_from_source(
+        """
+problem: 1 + 1
+end: 3
+"""
+    )
+    logger = LearningLogger()
+    evaluator = Evaluator(program, _engine(), learning_logger=logger)
+    with pytest.raises(InconsistentEndError):
+        evaluator.run()
+    errors = [record for record in logger.to_list() if record["phase"] == "error"]
+    assert errors
+    assert errors[-1]["status"] == "inconsistent_end"
+
+
 def test_evaluator_requires_problem():
     with pytest.raises(DslSyntaxError):
         _program_from_source(

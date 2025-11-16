@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from . import ast_nodes as ast
 from .errors import InconsistentEndError, InvalidStepError, MissingProblemError
@@ -130,7 +130,7 @@ class Evaluator:
         if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
             raise MissingProblemError("step declared before problem.")
         result = self.engine.check_step(node.expr)
-        status = "ok" if result["valid"] else "error"
+        status = "ok" if result["valid"] else "invalid_step"
         self.learning_logger.record(
             phase="step",
             expression=node.expr,
@@ -149,6 +149,15 @@ class Evaluator:
             candidate_expr=node.expr,
             applied_rule_id=result.get("rule_id"),
         )
+        self._log_error(
+            rendered="InvalidStepError",
+            status="invalid_step",
+            expression=node.expr,
+            meta={
+                "details": result.get("details", {}),
+                "step_id": node.step_id,
+            },
+        )
         raise InvalidStepError(f"Step is not equivalent: {node.expr}")
 
     def _handle_end(self, node: ast.EndNode) -> None:
@@ -156,6 +165,12 @@ class Evaluator:
             raise MissingProblemError("end declared before problem.")
         result = self.engine.finalize(node.expr)
         if not result["valid"]:
+            self._log_error(
+                rendered="InconsistentEndError",
+                status="inconsistent_end",
+                expression=node.expr,
+                meta=result.get("details", {}),
+            )
             raise InconsistentEndError("Final expression does not match expected result.")
         rendered = "End: done" if node.is_done else f"End: {node.expr}"
         self.learning_logger.record(
@@ -209,3 +224,19 @@ class Evaluator:
     def _normalized_expr(self, expr: str) -> NormalizedExpr:
         tokens = expr.split()
         return {"raw": expr, "sympy": expr, "tokens": tokens}
+
+    def _log_error(
+        self,
+        *,
+        rendered: str,
+        status: str,
+        expression: str | None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.learning_logger.record(
+            phase="error",
+            expression=expression,
+            rendered=rendered,
+            status=status,
+            meta=meta or {},
+        )

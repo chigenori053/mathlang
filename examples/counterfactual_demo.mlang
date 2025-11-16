@@ -1,0 +1,5 @@
+problem: (3 + 5) * 4
+step: 8 * 4
+step: 32 * 4
+explain: Mistakenly multiplied instead of simplifying
+end: 32
