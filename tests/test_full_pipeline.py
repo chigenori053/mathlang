@@ -1,8 +1,5 @@
-import pytest
-
 from core.causal import CausalEngine
 from core.evaluator import Evaluator, SymbolicEvaluationEngine
-from core.errors import InvalidStepError
 from core.fuzzy.types import FuzzyLabel, FuzzyResult, FuzzyScore
 from core.knowledge_registry import KnowledgeNode
 from core.learning_logger import LearningLogger
@@ -62,16 +59,11 @@ end: done
     fuzzy = RecordingFuzzyJudge()
     logger = LearningLogger()
     evaluator = Evaluator(program, eval_engine, learning_logger=logger, fuzzy_judge=fuzzy)
-
-    with pytest.raises(InvalidStepError):
-        evaluator.run()
-
+    evaluator.run()
     records = logger.to_list()
     assert records[1]["phase"] == "step" and records[1]["status"] == "ok"
     assert records[1]["rule_id"] == "TEST-RULE"
-    assert records[2]["phase"] == "step" and records[2]["status"] == "invalid_step"
-    error_records = [record for record in records if record["phase"] == "error"]
-    assert error_records and error_records[-1]["status"] == "invalid_step"
+    assert records[2]["phase"] == "step" and records[2]["status"] == "mistake"
     assert fuzzy.calls == 1
     assert any(record["phase"] == "fuzzy" for record in records)
 

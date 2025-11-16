@@ -12,9 +12,9 @@
 | シナリオ | テスト | ポイント |
 | --- | --- | --- |
 | 問題→ステップ→終了の正常シーケンス | `tests/test_evaluator.py::test_evaluator_runs_problem_step_end` | ログ順序と完了判定を確認 |
-| 無効ステップ検出 | `tests/test_evaluator.py::test_evaluator_invalid_step_raises` | `InvalidStepError` が発生しログが停止すること |
-| 終了式不整合の検出 | `tests/test_evaluator.py::test_evaluator_end_mismatch_raises` | `InconsistentEndError` の発生 |
-| 無効ステップ／不整合終了時のエラーログ出力 | `tests/test_evaluator.py::{test_evaluator_logs_error_record_for_invalid_step,test_evaluator_logs_error_record_for_inconsistent_end}` | LearningLogger に `phase=error` が残ることを確認 |
+| 無効ステップ検出 | `tests/test_evaluator.py::test_evaluator_records_mistake_for_invalid_step` | `status="mistake"` と `reason="invalid_step"` が記録される |
+| 終了式不整合の検出 | `tests/test_evaluator.py::test_evaluator_records_mistake_for_end_mismatch` | 最終レコードが `status="mistake"` かつ `reason="final_result_mismatch"` になる |
+| 計算ミスでもログ継続 | `tests/test_evaluator.py::test_evaluator_records_mistake_for_invalid_step` | 例外を投げずにログへ記録し、学習ログが最後まで残る |
 
 ## 2. ルール判別と曖昧度推定
 
@@ -39,7 +39,7 @@
 
 `tests/test_full_pipeline.py::test_full_reasoning_pipeline` では以下を一度に検証します。
 
-1. **ステップ判定**: 1 つ目のステップは正しく、2 つ目が `InvalidStepError` で停止する。
+1. **ステップ判定**: 1 つ目のステップは正しく、2 つ目が `status="mistake"` でログ記録される。
 2. **ルール判定 / Fuzzy**: 正しいステップに `rule_id` が付き、無効ステップで Fuzzy 判定が実行される。
 3. **因果推論**: ログを CausalEngine に取り込み、`why_error`・`suggest_fix_candidates`・`counterfactual_result` が期待通りに動作する。
 

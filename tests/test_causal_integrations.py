@@ -1,9 +1,6 @@
-import pytest
-
 from core.causal import CausalEngine
 from core.causal.causal_types import CausalNodeType
 from core.evaluator import Evaluator, SymbolicEvaluationEngine
-from core.errors import InvalidStepError
 from core.knowledge_registry import KnowledgeRegistry
 from core.learning_logger import LearningLogger
 from core.parser import Parser
@@ -27,11 +24,10 @@ end: 32
     program = Parser(source).parse()
     logger = LearningLogger()
     evaluator = Evaluator(program, _engine(), learning_logger=logger)
-    with pytest.raises(InvalidStepError):
-        evaluator.run()
-
+    evaluator.run()
     records = logger.to_list()
-    assert records[-1]["phase"] == "error"
+    step_records = [rec for rec in records if rec["phase"] == "step"]
+    assert step_records[-1]["status"] == "mistake"
     records[1]["rule_id"] = "CUSTOM-RULE-1"
 
     engine = CausalEngine()

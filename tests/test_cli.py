@@ -55,7 +55,7 @@ def test_cli_prints_fuzzy_on_invalid_step(capsys):
     )
     result = main(["-c", source])
     captured = capsys.readouterr()
-    assert result == 1
+    assert result == 0
     assert "Fuzzy:" in captured.out
     assert "Causal Analysis" in captured.out
 

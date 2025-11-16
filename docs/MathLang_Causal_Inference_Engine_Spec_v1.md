@@ -168,7 +168,7 @@ class CausalEngine:
           - rendered: str
           - rule_id: str | None
           - step_index: int | None
-          - status: str (e.g., "ok", "invalid_step", "inconsistent_end")
+          - status: str (e.g., "ok", "mistake", "fatal")
         This method:
           1. Creates/updates relevant CausalNode(s).
           2. Adds edges (step transitions, rule usage, error causes).
@@ -282,15 +282,16 @@ This yields a causal chain like:
 
 ### 5.3 Error Integration
 
-When Evaluator raises or logs errors:
+Evaluator v2 does not raise on computation mistakes. Instead it logs:
 
-- `InvalidStepError` → `phase = "error"`, `status = "invalid_step"`.
-- `InconsistentEndError` → `phase = "error"`, `status = "inconsistent_end"`.
+- `phase = "step"`, `status = "mistake"`, `meta.reason = "invalid_step"` for wrong steps.
+- `phase = "end"`, `status = "mistake"`, `meta.reason = "final_result_mismatch"` for wrong endings.
+- `status = "fatal"` only for unrecoverable failures (syntax/order issues).
 
 `CausalEngine.ingest_log_record` should:
 
-- Create `CausalNodeType.ERROR` for each error.
-- Connect from the last step / rule to error via `ERROR_CAUSE`.
+- Treat any non-`ok` step record as an error source and synthesize a `CausalNodeType.ERROR` node linked via `ERROR_CAUSE`.
+- Connect fatal records (if any) into the graph using their recorded phase.
 
 ---
 
@@ -344,9 +345,8 @@ records = [
   {"phase": "step", "step_index": 1, "expression": "8 * 4",
    "rendered": "8 * 4", "status": "ok", "rule_id": "ARITH-ADD-001"},
   {"phase": "step", "step_index": 2, "expression": "32 * 4",
-   "rendered": "32 * 4", "status": "invalid_step"},
-  {"phase": "error", "step_index": 2,
-   "rendered": "InvalidStepError", "status": "invalid_step"},
+   "rendered": "32 * 4", "status": "mistake",
+   "meta": {"reason": "invalid_step"}},
 ]
 ```
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.evaluator import Evaluator
-from core.i18n import get_language_pack
+from core.evaluator import Evaluator, SymbolicEvaluationEngine
+from core.knowledge_registry import KnowledgeRegistry
+from core.learning_logger import LearningLogger
+from core.symbolic_engine import SymbolicEngine
 from edu.dsl import EduParser
 
 
@@ -14,16 +16,17 @@ EXAMPLE_PATH = Path(__file__).with_name("pythagorean.mlang")
 
 def main() -> None:
     source = EXAMPLE_PATH.read_text(encoding="utf-8")
-    language = get_language_pack()
     program = EduParser(source).parse()
-    evaluator = Evaluator(program, language=language)
-    step_label = language.text("cli.step_label")
-
-    for result in evaluator.run():
-        if result.step_number:
-            print(f"{step_label} {result.step_number}: {result.message}")
-        else:
-            print(result.message)
+    logger = LearningLogger()
+    symbolic = SymbolicEngine()
+    knowledge = KnowledgeRegistry(Path("core/knowledge"), symbolic)
+    engine = SymbolicEvaluationEngine(symbolic, knowledge)
+    evaluator = Evaluator(program, engine=engine, learning_logger=logger)
+    evaluator.run()
+    for record in logger.to_list():
+        rendered = record.get("rendered") or record.get("expression") or ""
+        if rendered:
+            print(rendered)
 
 
 if __name__ == "__main__":

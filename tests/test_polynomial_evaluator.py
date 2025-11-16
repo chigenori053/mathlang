@@ -1,10 +1,7 @@
-import pytest
-
 from core.parser import Parser
 from core.polynomial_evaluator import PolynomialEvaluator
 from core.learning_logger import LearningLogger
 from core.symbolic_engine import SymbolicEngine
-from core.errors import InvalidStepError
 
 
 def _normalizer():
@@ -37,9 +34,12 @@ step: x^2 + 3*x + 2
 end: x^2 + 3*x + 2
 """
     program = Parser(source).parse()
-    evaluator = PolynomialEvaluator(program, normalizer=_normalizer(), learning_logger=LearningLogger())
-    records = evaluator.run()
+    logger = LearningLogger()
+    evaluator = PolynomialEvaluator(program, normalizer=_normalizer(), learning_logger=logger)
+    assert evaluator.run() is True
+    records = logger.to_list()
     assert [r["phase"] for r in records] == ["problem", "step", "end"]
+    assert all(record["status"] == "ok" for record in records)
 
 
 def test_polynomial_evaluator_detects_invalid_step():
@@ -49,6 +49,9 @@ step: x^2 + 2*x + 1
 end: done
 """
     program = Parser(source).parse()
-    evaluator = PolynomialEvaluator(program, normalizer=_normalizer())
-    with pytest.raises(InvalidStepError):
-        evaluator.run()
+    logger = LearningLogger()
+    evaluator = PolynomialEvaluator(program, normalizer=_normalizer(), learning_logger=logger)
+    assert evaluator.run() is True
+    step_record = next(record for record in logger.to_list() if record["phase"] == "step")
+    assert step_record["status"] == "mistake"
+    assert step_record["meta"]["reason"] == "invalid_step"

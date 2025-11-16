@@ -344,7 +344,15 @@ class CausalEngine:
             error_message = str(exc)
         new_records = logger.to_list()
         end_expr = self._find_last_end_expression(new_records)
-        first_error = next((rec for rec in new_records if (rec.get("phase") or "").lower() == "error"), None)
+        first_error = next(
+            (
+                rec
+                for rec in new_records
+                if (rec.get("phase") or "").lower() in {"step", "end"}
+                and (rec.get("status") or "").lower() not in {"ok"}
+            ),
+            None,
+        )
         last_phase = new_records[-1]["phase"] if new_records else None
         return {
             "success": success,

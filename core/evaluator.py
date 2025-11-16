@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from . import ast_nodes as ast
-from .errors import InconsistentEndError, InvalidStepError, MissingProblemError
+from .errors import MathLangError, MissingProblemError
 from .learning_logger import LearningLogger
 from .symbolic_engine import SymbolicEngine
 from .knowledge_registry import KnowledgeRegistry
@@ -95,7 +95,7 @@ class Evaluator:
         self._current_problem_expr: str | None = None
         self._last_expr_raw: str | None = None
 
-    def run(self) -> List[dict]:
+    def run(self) -> bool:
         for node in self.program.body:
             if isinstance(node, ast.ProblemNode):
                 self._handle_problem(node)
@@ -118,14 +118,34 @@ class Evaluator:
             else:  # pragma: no cover - defensive block.
                 raise SyntaxError(f"Unsupported node type: {type(node)}")
         if self._state != "END":
-            raise MissingProblemError("Program did not reach an end statement.")
+            exc = MissingProblemError("Program did not reach an end statement.")
+            self._fatal(
+                phase="end",
+                expression=None,
+                rendered="Fatal: missing end statement.",
+                exc=exc,
+            )
         self._completed = True
-        return self.learning_logger.to_list()
+        return True
 
     def _handle_problem(self, node: ast.ProblemNode) -> None:
         if self._state != "INIT":
-            raise MissingProblemError("Problem already defined.")
-        self.engine.set(node.expr)
+            exc = MissingProblemError("Problem already defined.")
+            self._fatal(
+                phase="problem",
+                expression=node.expr,
+                rendered=f"Duplicate problem: {node.expr}",
+                exc=exc,
+            )
+        try:
+            self.engine.set(node.expr)
+        except MathLangError as exc:
+            self._fatal(
+                phase="problem",
+                expression=node.expr,
+                rendered=f"Problem: {node.expr}",
+                exc=exc,
+            )
         self._current_problem_expr = node.expr
         self._last_expr_raw = node.expr
         self.learning_logger.record(
@@ -138,18 +158,43 @@ class Evaluator:
 
     def _handle_step(self, node: ast.StepNode) -> None:
         if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
-            raise MissingProblemError("step declared before problem.")
-        result = self.engine.check_step(node.expr)
-        status = "ok" if result["valid"] else "invalid_step"
+            exc = MissingProblemError("step declared before problem.")
+            self._fatal(
+                phase="step",
+                expression=node.expr,
+                rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
+                exc=exc,
+            )
+        try:
+            result = self.engine.check_step(node.expr)
+        except MathLangError as exc:
+            self._fatal(
+                phase="step",
+                expression=node.expr,
+                rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
+                exc=exc,
+            )
+        is_valid = bool(result["valid"])
+        status = "ok" if is_valid else "mistake"
+        meta = dict(result.get("details", {}) or {})
+        if not is_valid:
+            meta.update(
+                {
+                    "reason": "invalid_step",
+                    "expected": result.get("before"),
+                    "before": result.get("before"),
+                    "after": result.get("after"),
+                }
+            )
         self.learning_logger.record(
             phase="step",
             expression=node.expr,
             rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
             status=status,
             rule_id=result.get("rule_id"),
-            meta=result.get("details", {}),
+            meta=meta,
         )
-        if result["valid"]:
+        if is_valid:
             self._last_expr_raw = node.expr
             self._state = "STEP_RUN"
             return
@@ -159,43 +204,57 @@ class Evaluator:
             candidate_expr=node.expr,
             applied_rule_id=result.get("rule_id"),
         )
-        self._log_error(
-            rendered="InvalidStepError",
-            status="invalid_step",
-            expression=node.expr,
-            meta={
-                "details": result.get("details", {}),
-                "step_id": node.step_id,
-            },
-        )
-        raise InvalidStepError(f"Step is not equivalent: {node.expr}")
 
     def _handle_end(self, node: ast.EndNode) -> None:
         if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
-            raise MissingProblemError("end declared before problem.")
-        result = self.engine.finalize(node.expr)
-        if not result["valid"]:
-            self._log_error(
-                rendered="InconsistentEndError",
-                status="inconsistent_end",
+            exc = MissingProblemError("end declared before problem.")
+            self._fatal(
+                phase="end",
                 expression=node.expr,
-                meta=result.get("details", {}),
+                rendered=f"End: {node.expr}",
+                exc=exc,
             )
-            raise InconsistentEndError("Final expression does not match expected result.")
+        try:
+            result = self.engine.finalize(node.expr)
+        except MathLangError as exc:
+            self._fatal(
+                phase="end",
+                expression=node.expr,
+                rendered=f"End: {node.expr}",
+                exc=exc,
+            )
+        is_valid = bool(result["valid"])
+        status = "ok" if is_valid else "mistake"
+        meta = dict(result.get("details", {}) or {})
+        if not is_valid:
+            meta.update(
+                {
+                    "reason": "final_result_mismatch",
+                    "expected": result.get("before"),
+                    "actual": result.get("after"),
+                }
+            )
         rendered = "End: done" if node.is_done else f"End: {node.expr}"
         self.learning_logger.record(
             phase="end",
             expression=node.expr if not node.is_done else None,
             rendered=rendered,
-            status="ok",
-            meta=result.get("details", {}),
+            status=status,
+            meta=meta,
         )
         self._state = "END"
-        self._last_expr_raw = node.expr if not node.is_done else self._last_expr_raw
+        if not node.is_done:
+            self._last_expr_raw = node.expr
 
     def _handle_explain(self, node: ast.ExplainNode) -> None:
         if self._state == "INIT":
-            raise MissingProblemError("Explain cannot appear before problem.")
+            exc = MissingProblemError("Explain cannot appear before problem.")
+            self._fatal(
+                phase="explain",
+                expression=None,
+                rendered="Explain before problem.",
+                exc=exc,
+            )
         self.learning_logger.record(
             phase="explain",
             expression=None,
@@ -209,7 +268,7 @@ class Evaluator:
                 phase="prepare",
                 expression=stmt,
                 rendered=f"Prepare: {stmt}",
-                status="info",
+                status="ok",
             )
 
     def _handle_config(self, node: ast.ConfigNode) -> None:
@@ -217,7 +276,7 @@ class Evaluator:
             phase="config",
             expression=None,
             rendered=f"Config: {node.options}",
-            status="info",
+            status="ok",
         )
 
     def _run_fuzzy_judge(
@@ -244,7 +303,7 @@ class Evaluator:
             phase="fuzzy",
             expression=candidate_expr,
             rendered=f"Fuzzy: {fuzzy_result['label'].value} ({fuzzy_result['score']['combined_score']:.2f})",
-            status="info",
+            status="ok",
             meta=fuzzy_result,
         )
 
@@ -252,18 +311,19 @@ class Evaluator:
         tokens = expr.split()
         return {"raw": expr, "sympy": expr, "tokens": tokens}
 
-    def _log_error(
+    def _fatal(
         self,
         *,
-        rendered: str,
-        status: str,
+        phase: str,
         expression: str | None,
-        meta: Optional[Dict[str, Any]] = None,
+        rendered: str | None,
+        exc: Exception,
     ) -> None:
         self.learning_logger.record(
-            phase="error",
+            phase=phase,
             expression=expression,
             rendered=rendered,
-            status=status,
-            meta=meta or {},
+            status="fatal",
+            meta={"exception": exc.__class__.__name__, "message": str(exc)},
         )
+        raise exc

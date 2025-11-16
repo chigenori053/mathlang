@@ -14,11 +14,12 @@ def _base_records():
             "status": "ok",
             "rule_id": "ARITH-ADD-001",
         },
-        {"phase": "step", "expression": "32 * 4", "rendered": "step 2", "status": "invalid_step"},
         {
-            "phase": "error",
-            "rendered": "InvalidStepError",
-            "status": "invalid_step",
+            "phase": "step",
+            "expression": "32 * 4",
+            "rendered": "step 2",
+            "status": "mistake",
+            "meta": {"reason": "invalid_step"},
         },
         {"phase": "end", "expression": "32", "rendered": "end", "status": "ok"},
     ]

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from . import ast_nodes as ast
-from .errors import InvalidStepError, MissingProblemError
+from .errors import MissingProblemError
 from .learning_logger import LearningLogger
 
 
@@ -24,7 +24,7 @@ class PolynomialEvaluator:
         self._state = "INIT"
         self._current_normalized: str | None = None
 
-    def run(self) -> List[dict]:
+    def run(self) -> bool:
         for node in self.program.body:
             if isinstance(node, ast.ProblemNode):
                 self._handle_problem(node)
@@ -33,20 +33,27 @@ class PolynomialEvaluator:
             elif isinstance(node, ast.EndNode):
                 self._handle_end(node)
             elif isinstance(node, ast.ExplainNode):
-                self.learning_logger.record(
-                    phase="explain",
-                    expression=None,
-                    rendered=node.text,
-                    status="ok",
-                )
+                self._handle_explain(node)
         if self._state != "END":
-            raise MissingProblemError("Program did not reach an end statement.")
-        return self.learning_logger.to_list()
+            exc = MissingProblemError("Program did not reach an end statement.")
+            self._fatal(
+                phase="end",
+                expression=None,
+                rendered="Fatal: missing end statement.",
+                exc=exc,
+            )
+        return True
 
     def _handle_problem(self, node: ast.ProblemNode) -> None:
         if self._state != "INIT":
-            raise MissingProblemError("Problem already defined.")
-        normalized = self.normalizer(node.expr)
+            exc = MissingProblemError("Problem already defined.")
+            self._fatal(
+                phase="problem",
+                expression=node.expr,
+                rendered=f"Duplicate problem: {node.expr}",
+                exc=exc,
+            )
+        normalized = self._normalize_expr(node.expr, phase="problem")
         self._current_normalized = normalized
         self.learning_logger.record(
             phase="problem",
@@ -58,36 +65,114 @@ class PolynomialEvaluator:
 
     def _handle_step(self, node: ast.StepNode) -> None:
         if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
-            raise MissingProblemError("step declared before problem.")
-        normalized = self.normalizer(node.expr)
-        if normalized != self._current_normalized:
-            raise InvalidStepError("Polynomial step is not equivalent.")
+            exc = MissingProblemError("step declared before problem.")
+            self._fatal(
+                phase="step",
+                expression=node.expr,
+                rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
+                exc=exc,
+            )
+        normalized = self._normalize_expr(node.expr, phase="step")
+        is_valid = normalized == self._current_normalized
+        status = "ok" if is_valid else "mistake"
+        meta = {}
+        if not is_valid:
+            meta = {
+                "reason": "invalid_step",
+                "expected": self._current_normalized,
+                "actual": normalized,
+            }
         self.learning_logger.record(
             phase="step",
             expression=node.expr,
             rendered=f"Step ({node.step_id or 'unnamed'}): {node.expr}",
-            status="ok",
+            status=status,
+            meta=meta,
         )
-        self._state = "STEP_RUN"
+        if is_valid:
+            self._state = "STEP_RUN"
 
     def _handle_end(self, node: ast.EndNode) -> None:
         if self._state not in {"PROBLEM_SET", "STEP_RUN"}:
-            raise MissingProblemError("end declared before problem.")
+            exc = MissingProblemError("end declared before problem.")
+            self._fatal(
+                phase="end",
+                expression=node.expr,
+                rendered=f"End: {node.expr}",
+                exc=exc,
+            )
         if self._current_normalized is None:
-            raise MissingProblemError("Problem must be declared before end.")
+            exc = MissingProblemError("Problem must be declared before end.")
+            self._fatal(
+                phase="end",
+                expression=node.expr,
+                rendered=f"End: {node.expr}",
+                exc=exc,
+            )
         if node.is_done:
-            target_expr = self._current_normalized
+            normalized_target = self._current_normalized
         else:
-            target_expr = self.normalizer(node.expr or "")
-        if target_expr is None:
-            raise MissingProblemError("No expression to compare for end statement.")
-        if target_expr != self._current_normalized:
-            raise InvalidStepError("End expression is not equivalent.")
+            normalized_target = self._normalize_expr(node.expr or "", phase="end")
+        is_valid = normalized_target == self._current_normalized
+        status = "ok" if is_valid else "mistake"
+        meta = {}
+        if not is_valid:
+            meta = {
+                "reason": "final_result_mismatch",
+                "expected": self._current_normalized,
+                "actual": normalized_target,
+            }
         rendered = "End: done" if node.is_done else f"End: {node.expr}"
         self.learning_logger.record(
             phase="end",
             expression=node.expr if not node.is_done else None,
             rendered=rendered,
-            status="ok",
+            status=status,
+            meta=meta,
         )
         self._state = "END"
+
+    def _handle_explain(self, node: ast.ExplainNode) -> None:
+        if self._state == "INIT":
+            exc = MissingProblemError("Explain cannot appear before problem.")
+            self._fatal(
+                phase="explain",
+                expression=None,
+                rendered="Explain before problem.",
+                exc=exc,
+            )
+        self.learning_logger.record(
+            phase="explain",
+            expression=None,
+            rendered=node.text,
+            status="ok",
+        )
+
+    def _normalize_expr(self, expr: str, *, phase: str) -> str:
+        try:
+            return self.normalizer(expr)
+        except Exception as exc:  # pragma: no cover - delegated to fatal log
+            self._fatal(
+                phase=phase,
+                expression=expr,
+                rendered=f"{phase.title()}: {expr}",
+                exc=exc,
+            )
+        raise AssertionError("unreachable")  # pragma: no cover - satisfies type checkers
+
+    def _fatal(
+        self,
+        *,
+        phase: str,
+        expression: str | None,
+        rendered: str | None,
+        exc: Exception,
+    ) -> None:
+        self.learning_logger.record(
+            phase=phase,
+            expression=expression,
+            rendered=rendered,
+            status="fatal",
+            meta={"exception": exc.__class__.__name__, "message": str(exc)},
+        )
+        raise exc
