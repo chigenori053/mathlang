@@ -1,0 +1,17 @@
+{
+  "scenarios": {
+    "basic_arithmetic": {
+      "description": "Solve a simple arithmetic problem and log steps",
+      "file": "edu/examples/pythagorean.mlang"
+    },
+    "counterfactual": {
+      "description": "Demonstrate counterfactual editing",
+      "file": "edu/examples/counterfactual_demo.mlang",
+      "counterfactual": {
+        "phase": "step",
+        "index": 2,
+        "expression": "8 * 4"
+      }
+    }
+  }
+}

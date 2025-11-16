@@ -5,6 +5,7 @@ import pytest
 
 from main import main
 from pro.cli import main as pro_main
+from edu.demo.edu_demo_runner import main as edu_demo_main
 
 
 def test_cli_hello_world(capsys):
@@ -68,6 +69,14 @@ def test_pro_cli_runs_inline_code(capsys):
         """
     )
     result = pro_main(["-c", source])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Problem" in captured.out
+
+
+def test_edu_demo_runner_basic(capsys):
+    capsys.readouterr()
+    result = edu_demo_main(["basic_arithmetic"])
     captured = capsys.readouterr()
     assert result == 0
     assert "Problem" in captured.out

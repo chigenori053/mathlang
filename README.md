@@ -43,9 +43,15 @@ Expected output:
 - Switch to the polynomial evaluator: `python main.py --mode polynomial --file edu/examples/polynomial_arithmetic.mlang`
 - Run the built-in Hello World self-test: `python main.py --hello-world-test`
 - Simulate a counterfactual: `python main.py --file edu/examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`
+- Run the Edu demo runner: `python -m edu.demo.edu_demo_runner basic_arithmetic`
+- Run the Pro CLI: `python -m pro.cli -c "problem: (x + 1) * (x + 2)\nend: (x + 1) * (x + 2)"`
+- Run the Pro demo runner: `python -m pro.demo_runner counterfactual`
 
 The CLI prints rendered text for every `problem`, `step`, `explain`, and `end` clause. Symbolic mode verifies steps with SymPy and the knowledge registry, while polynomial mode expands expressions before comparing them.  
 エラーが発生した場合は、収集した LearningLogger レコードを元に因果推論エンジンが解析され、`== Causal Analysis ==` セクションとして推定原因と修正候補ステップが追加表示されます。
+
+## Pro Edition
+プロフェッショナル向け CLI / デモについては `README_PRO.md` を参照。`python -m pro.cli ...` で直接呼び出せます。
 
 ## Learning Logs & Notebook Demo
 MathLang now ships with a lightweight `LearningLogger` that records `problem → step → end` events (including rule IDs supplied by the knowledge base) as JSON. You can pass the logger into an evaluator:
