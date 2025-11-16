@@ -47,3 +47,17 @@ def test_parser_handles_v25_blocks():
     cf = next(node for node in program.body if isinstance(node, ast.CounterfactualNode))
     assert cf.assume["x"] == "10"
     assert cf.expect == "3*x + 2"
+
+
+def test_parser_old_style_step_ids():
+    source = """
+problem: x + 1
+step1: x + 2
+step2: x + 3
+end: done
+"""
+    program = Parser(source).parse()
+    steps = [node for node in program.body if isinstance(node, ast.StepNode)]
+    assert len(steps) == 2
+    assert steps[0].step_id == "1"
+    assert steps[1].step_id == "2"

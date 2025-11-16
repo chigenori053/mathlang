@@ -23,18 +23,39 @@ Reference structure and full requirements live in `MathLang_SPECIFICATION.md`.
 
 ## DSL Glimpse
 ```text
-# Stepwise computation
-a = 2
-b = 3
-c = a^2 + b^2
-show c
+# MathLang DSL v2.5 example
+meta:
+    id: lesson_01
+    topic: arithmetic
+config:
+    causal: true
+    fuzzy-threshold: 0.6
+problem: (3 + 5) * 4
+prepare:
+    - a = 3 + 5
+    - b = a * 4
+step:
+    before: (3 + 5) * 4
+    after: 8 * 4
+    note: simplify addition
+step:
+    before: 8 * 4
+    after: 32
+end: 32
+counterfactual:
+    assume:
+        a: 10
+    expect: a * 3 + 2
 ```
 Expected output:
 ```
-ステップ 1: a = 2
-ステップ 2: b = 3
-ステップ 3: c = a^2 + b^2 → 13
-出力: 13
+Config: {'causal': True, 'fuzzy-threshold': 0.6}
+Problem: (3 + 5) * 4
+Prepare: a = 3 + 5
+Prepare: b = a * 4
+Step (unnamed): 8 * 4
+Step (unnamed): 32
+End: 32
 ```
 
 ## CLI Usage

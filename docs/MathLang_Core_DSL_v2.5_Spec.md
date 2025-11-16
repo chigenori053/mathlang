@@ -229,9 +229,12 @@ Mapped into AST nodes:
 
 | DSL Section | AST Node |
 |-------------|----------|
+| meta | MetaNode |
+| config | ConfigNode |
+| mode | ModeNode |
 | problem | ProblemNode |
-| prepare | PrepareListNode |
-| step | StepNode(before_ast, after_ast) |
+| prepare | PrepareNode |
+| step | StepNode (with optional before/note) |
 | end | EndNode |
 | counterfactual | CounterfactualNode |
 
@@ -250,7 +253,7 @@ config:
 
 mode: causal
 
-problem: (3+5)*4
+problem: (3 + 5) * 4
 
 step:
     before: (3+5)*4
@@ -267,7 +270,7 @@ end: 32
 counterfactual:
     assume:
         x: 10
-    expect: x*3 + 2
+    expect: 3*x + 2
 ```
 
 ---

@@ -99,12 +99,22 @@ class Evaluator:
         for node in self.program.body:
             if isinstance(node, ast.ProblemNode):
                 self._handle_problem(node)
+            elif isinstance(node, ast.MetaNode):
+                continue
+            elif isinstance(node, ast.ConfigNode):
+                self._handle_config(node)
+            elif isinstance(node, ast.ModeNode):
+                continue
+            elif isinstance(node, ast.PrepareNode):
+                self._handle_prepare(node)
             elif isinstance(node, ast.StepNode):
                 self._handle_step(node)
             elif isinstance(node, ast.EndNode):
                 self._handle_end(node)
             elif isinstance(node, ast.ExplainNode):
                 self._handle_explain(node)
+            elif isinstance(node, ast.CounterfactualNode):
+                continue
             else:  # pragma: no cover - defensive block.
                 raise SyntaxError(f"Unsupported node type: {type(node)}")
         if self._state != "END":
@@ -191,6 +201,23 @@ class Evaluator:
             expression=None,
             rendered=node.text,
             status="ok",
+        )
+
+    def _handle_prepare(self, node: ast.PrepareNode) -> None:
+        for stmt in node.statements:
+            self.learning_logger.record(
+                phase="prepare",
+                expression=stmt,
+                rendered=f"Prepare: {stmt}",
+                status="info",
+            )
+
+    def _handle_config(self, node: ast.ConfigNode) -> None:
+        self.learning_logger.record(
+            phase="config",
+            expression=None,
+            rendered=f"Config: {node.options}",
+            status="info",
         )
 
     def _run_fuzzy_judge(
