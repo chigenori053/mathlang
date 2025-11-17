@@ -43,16 +43,20 @@ def run_causal_analysis(
     }
     if include_graph:
         report["graph"] = export.get("graph")
-    if rule_info:
-        used_rules: Dict[str, Dict[str, Any]] = {}
-        for node in engine.graph.nodes.values():
-            if node.node_type != CausalNodeType.RULE_APPLICATION:
-                continue
-            rule_id = node.payload.get("rule_id")
-            if rule_id and rule_id in rule_info and rule_id not in used_rules:
-                used_rules[rule_id] = rule_info[rule_id]
-        if used_rules:
-            report["rule_details"] = used_rules
+    used_rules: Dict[str, Dict[str, Any]] = {}
+    for node in engine.graph.nodes.values():
+        if node.node_type != CausalNodeType.RULE_APPLICATION:
+            continue
+        rule_id = node.payload.get("rule_id")
+        if not rule_id or rule_id in used_rules:
+            continue
+        rule_meta = node.payload.get("rule_meta")
+        if isinstance(rule_meta, dict) and rule_meta:
+            used_rules[rule_id] = rule_meta
+        elif rule_info and rule_id in rule_info:
+            used_rules[rule_id] = rule_info[rule_id]
+    if used_rules:
+        report["rule_details"] = used_rules
     return engine, report
 
 

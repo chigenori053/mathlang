@@ -13,6 +13,16 @@ def _base_records():
             "rendered": "step 1",
             "status": "ok",
             "rule_id": "ARITH-ADD-001",
+            "meta": {
+                "rule": {
+                    "id": "ARITH-ADD-001",
+                    "description": "Addition commutativity",
+                    "domain": "arithmetic",
+                    "category": "addition",
+                    "pattern_before": "a + b",
+                    "pattern_after": "b + a",
+                }
+            },
         },
         {
             "phase": "step",
@@ -124,12 +134,19 @@ def test_counterfactual_insert_and_delete():
 
 
 def test_run_causal_analysis_reports_errors_with_rule_details():
-    rule_info = {
-        "ARITH-ADD-001": {"description": "Addition commutativity"},
-    }
-    engine, report = run_causal_analysis(_base_records(), rule_info=rule_info)
+    engine, report = run_causal_analysis(_base_records())
     assert isinstance(engine, CausalEngine)
     assert report["errors"]
     assert report["explanations"]
     assert report["explanations"][0]["cause_steps"]
+    assert report["rule_details"]["ARITH-ADD-001"]["description"] == "Addition commutativity"
+
+
+def test_run_causal_analysis_rule_info_fallback():
+    records = _base_records()
+    records[1].pop("meta", None)
+    rule_info = {
+        "ARITH-ADD-001": {"description": "Addition commutativity"}
+    }
+    _, report = run_causal_analysis(records, rule_info=rule_info)
     assert report["rule_details"]["ARITH-ADD-001"]["description"] == "Addition commutativity"

@@ -2,6 +2,8 @@ from core.parser import Parser
 from core.polynomial_evaluator import PolynomialEvaluator
 from core.learning_logger import LearningLogger
 from core.symbolic_engine import SymbolicEngine
+from core.fuzzy.types import FuzzyLabel, FuzzyResult, FuzzyScore
+from core.fuzzy.types import FuzzyLabel, FuzzyResult, FuzzyScore
 
 
 def _normalizer():
@@ -25,6 +27,26 @@ def _normalizer():
         return "|".join(values)
 
     return normalize
+
+
+class RecordingPolynomialFuzzyJudge:
+    def __init__(self, label: FuzzyLabel) -> None:
+        self.label = label
+        self.calls = 0
+
+    def judge_step(self, **kwargs) -> FuzzyResult:
+        self.calls += 1
+        return {
+            "label": self.label,
+            "score": FuzzyScore(
+                expr_similarity=0.6,
+                rule_similarity=0.0,
+                text_similarity=0.0,
+                combined_score=0.6,
+            ),
+            "reason": "poly",
+            "debug": {"candidate_raw": kwargs["candidate_expr"]["raw"]},
+        }
 
 
 def test_polynomial_evaluator_accepts_equivalent_steps():
@@ -55,3 +77,24 @@ end: done
     step_record = next(record for record in logger.to_list() if record["phase"] == "step")
     assert step_record["status"] == "mistake"
     assert step_record["meta"]["reason"] == "invalid_step"
+
+
+def test_polynomial_evaluator_triggers_fuzzy_when_invalid_step():
+    source = """
+mode: fuzzy
+problem: (x + 1) * (x + 2)
+step: x^2 + 2*x + 1
+end: done
+"""
+    program = Parser(source).parse()
+    logger = LearningLogger()
+    fuzzy = RecordingPolynomialFuzzyJudge(FuzzyLabel.APPROX_EQ)
+    evaluator = PolynomialEvaluator(
+        program,
+        normalizer=_normalizer(),
+        learning_logger=logger,
+        fuzzy_judge=fuzzy,
+    )
+    assert evaluator.run() is True
+    assert fuzzy.calls == 1
+    assert any(record["phase"] == "fuzzy" for record in logger.to_list())

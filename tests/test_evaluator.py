@@ -24,16 +24,18 @@ def _engine():
 def test_evaluator_records_problem_step_end():
     program = _program_from_source(
         """
-problem: (x + 1) * (x + 2)
-step: x^2 + 3*x + 2
-end: x^2 + 3*x + 2
-"""
+        prepare:
+            - x = 1
+        problem: (x + 1) * (x + 2)
+        step: x^2 + 3*x + 2
+        end: x^2 + 3*x + 2
+        """
     )
     logger = LearningLogger()
     evaluator = Evaluator(program, _engine(), learning_logger=logger)
     assert evaluator.run() is True
     records = logger.to_list()
-    assert [record["phase"] for record in records] == ["problem", "step", "end"]
+    assert [record["phase"] for record in records] == ["prepare", "problem", "step", "end"]
     assert all(record["status"] == "ok" for record in records)
 
 
@@ -58,6 +60,7 @@ def test_evaluator_records_mistake_for_end_mismatch():
     program = _program_from_source(
         """
 problem: 1 + 1
+step: 2
 end: 3
 """
     )
@@ -139,10 +142,11 @@ class StubFuzzyJudge:
 
 def test_evaluator_logs_fuzzy_when_invalid_step():
     source = """
-problem: 1 + 1
-step: 3
-end: done
-"""
+        mode: fuzzy
+        problem: 1 + 1
+        step: 3
+        end: done
+        """
     program = Parser(source).parse()
     fuzzy = StubFuzzyJudge()
     logger = LearningLogger()
@@ -193,10 +197,11 @@ end: 16
 
 def test_arithmetic_non_equivalent_triggers_fuzzy():
     source = """
-problem: (3 + 5) * 2
-step: 15
-end: done
-"""
+        mode: fuzzy
+        problem: (3 + 5) * 2
+        step: 15
+        end: done
+        """
     program = Parser(source).parse()
     fuzzy = RecordingFuzzyJudge(FuzzyLabel.ANALOGOUS)
     logger = LearningLogger()
@@ -208,10 +213,13 @@ end: done
 
 def test_polynomial_non_equivalent_triggers_fuzzy():
     source = """
-problem: (x + 1) * (x + 2)
-step: x^2 + 2*x + 1
-end: done
-"""
+        mode: fuzzy
+        problem: (x + 1) * (x + 2)
+        prepare:
+            - x = 1
+        step: x^2 + 2*x + 1
+        end: done
+        """
     program = Parser(source).parse()
     fuzzy = RecordingFuzzyJudge(FuzzyLabel.APPROX_EQ)
     logger = LearningLogger()
@@ -222,10 +230,11 @@ end: done
 
 def test_fraction_non_equivalent_triggers_fuzzy():
     source = """
-problem: 1/2 + 1/3
-step: 2/3
-end: done
-"""
+        mode: fuzzy
+        problem: 1/2 + 1/3
+        step: 2/3
+        end: done
+        """
     program = Parser(source).parse()
     fuzzy = RecordingFuzzyJudge(FuzzyLabel.CONTRADICT)
     logger = LearningLogger()

@@ -1,25 +1,29 @@
-# Polynomial Arithmetic Example for MathLang Core DSL v2.2
+meta:
+    id: pro_poly_counterfactual
+    topic: research-polynomial
+config:
+    causal: true
+    normalize: true
+mode: causal
 
-# --- Addition ---
-problem: (x + 1) + (x + 2)
-step: (x + 1) + (x + 2) = 2*x + 3
-explain: "Combine like terms to collect x"
-end: done
+prepare:
+    - observed_x = 3
 
-# --- Subtraction ---
-problem: (x^2 + 3*x + 2) - (x + 2)
-step: (x^2 + 3*x + 2) - (x + 2) = x^2 + 2*x
-explain: "Cancel constants, then merge x terms"
-end: done
+problem: (observed_x + 1) * (observed_x + 2)
 
-# --- Multiplication ---
-problem: (x + y) * (x - y)
-step: (x + y) * (x - y) = x^2 - y^2
-explain: "Apply distributive law to reach the difference of squares"
-end: done
+step:
+    before: (observed_x + 1) * (observed_x + 2)
+    after: observed_x^2 + 3*observed_x + 2
+    note: "Expand to compare with observed samples"
 
-# --- Division ---
-problem: (2*x*y) / 2
-step: (2*x*y) / 2 = x*y
-explain: "Cancel the constant factor"
-end: done
+step:
+    before: observed_x^2 + 3*observed_x + 2
+    after: (observed_x + 1) * (observed_x + 2)
+    note: "Refactor to confirm canonical form"
+
+end: (observed_x + 1) * (observed_x + 2)
+
+counterfactual:
+    assume:
+        observed_x: 4
+    expect: (observed_x + 1) * (observed_x + 2)

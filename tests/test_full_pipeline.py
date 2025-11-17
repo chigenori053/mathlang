@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from core.causal import CausalEngine
 from core.evaluator import Evaluator, SymbolicEvaluationEngine
 from core.fuzzy.types import FuzzyLabel, FuzzyResult, FuzzyScore
@@ -47,11 +49,12 @@ class RecordingFuzzyJudge:
 
 def test_full_reasoning_pipeline():
     source = """
-problem: 1 + 1
-step: 2
-step: 4
-end: done
-"""
+        mode: fuzzy
+        problem: 1 + 1
+        step: 2
+        step: 4
+        end: done
+    """
     program = Parser(source).parse()
     symbolic = SymbolicEngine()
     knowledge = StubKnowledgeRegistry()
@@ -61,9 +64,10 @@ end: done
     evaluator = Evaluator(program, eval_engine, learning_logger=logger, fuzzy_judge=fuzzy)
     evaluator.run()
     records = logger.to_list()
-    assert records[1]["phase"] == "step" and records[1]["status"] == "ok"
-    assert records[1]["rule_id"] == "TEST-RULE"
-    assert records[2]["phase"] == "step" and records[2]["status"] == "mistake"
+    step_records = [record for record in records if record["phase"] == "step"]
+    assert step_records[0]["status"] == "ok"
+    assert step_records[0]["rule_id"] == "TEST-RULE"
+    assert step_records[1]["status"] == "mistake"
     assert fuzzy.calls == 1
     assert any(record["phase"] == "fuzzy" for record in records)
 

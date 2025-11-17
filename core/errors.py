@@ -27,5 +27,9 @@ class InvalidExprError(MathLangError):
     """Raised when symbolic or polynomial engines cannot interpret an expression."""
 
 
+class EvaluationError(MathLangError):
+    """Raised during expression evaluation."""
+
+
 class ExtraContentError(MathLangError):
     """Raised when additional statements appear after an end declaration."""

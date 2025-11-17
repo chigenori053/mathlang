@@ -223,13 +223,14 @@ class CausalEngine:
         self._last_flow_node_id = node_id
         self._last_step_node_id = node_id
         self._step_nodes.append(node_id)
+        metadata = record.get("meta") or {}
         rule_id = record.get("rule_id")
         if rule_id:
             rule_node_id = f"rule-{rule_id}"
             rule_node = CausalNode(
                 node_id=rule_node_id,
                 node_type=CausalNodeType.RULE_APPLICATION,
-                payload={"rule_id": rule_id},
+                payload={"rule_id": rule_id, "rule_meta": metadata.get("rule")},
             )
             self._register_node(rule_node)
             self.graph.add_edge(

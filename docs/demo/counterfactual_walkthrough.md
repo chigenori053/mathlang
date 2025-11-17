@@ -1,12 +1,24 @@
 # Counterfactual & Causal Analysis Walkthrough
 
-1. `python main.py --file edu/examples/counterfactual_demo.mlang`  
-   - 実行後 `== Causal Analysis ==` セクションで原因ステップと修正候補を確認。
+`edu/examples/counterfactual_demo.mlang` は DSL v2.5 の代表的なサンプルで、以下のブロックをすべて含みます。
 
-2. `python main.py --file edu/examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * 4"}'`  
-   - `== Counterfactual Simulation ==` で置換結果・新しい end 表現を確認。
+```text
+meta / config / mode / prepare / problem / step (before/after/note) / end / counterfactual
+```
 
-3. Notebook では以下を実行  
+1. 基本実行  
+   `python main.py --file edu/examples/counterfactual_demo.mlang`  
+   - `prepare` で宣言した `base_sum` と `scale_factor` がログに出力され、2つ目の step が `mistake` として因果解析に記録される。
+
+2. CLI で介入を適用  
+   `python main.py --file edu/examples/counterfactual_demo.mlang --counterfactual '{"phase": "step", "index": 2, "expression": "8 * factor"}'`  
+   - `== Counterfactual Simulation ==` セクションで置換後の step/ end、`new_end_expr` を確認できる。
+
+3. Demo Runner 経由で再生  
+   `python -m edu.demo.edu_demo_runner counterfactual --with-counterfactual`  
+   - `edu/config/edu_demo_config.yaml` のシナリオ定義からファイルと `counterfactual` ブロックを自動で解決する。
+
+4. Notebook 連携  
 ```python
 from core.causal.integration import run_causal_analysis
 from core.causal.graph_utils import graph_to_text
@@ -15,4 +27,4 @@ engine, report = run_causal_analysis(records, include_graph=True)
 print(graph_to_text(report["graph"]))
 ```
 
-4. `docs/data/fuzzy_samples.json` を用いて FuzzyJudge の実データ評価を再現 (`tests/test_fuzzy_real_data.py` を参照)。
+5. 補足：`docs/data/fuzzy_samples.json` を読み込み、`tests/test_fuzzy_real_data.py` と同じ手順で FuzzyJudge の実データ検証を再現可能。

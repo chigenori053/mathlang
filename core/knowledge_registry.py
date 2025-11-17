@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency
     import yaml
@@ -23,6 +23,20 @@ class KnowledgeNode:
     pattern_before: str
     pattern_after: str
     description: str
+    extra: Dict[str, Any] | None = None
+
+    def to_metadata(self) -> Dict[str, Any]:
+        data = {
+            "id": self.id,
+            "domain": self.domain,
+            "category": self.category,
+            "pattern_before": self.pattern_before,
+            "pattern_after": self.pattern_after,
+            "description": self.description,
+        }
+        if self.extra:
+            data.update(self.extra)
+        return data
 
 
 class KnowledgeRegistry:
@@ -51,6 +65,7 @@ class KnowledgeRegistry:
                     pattern_before=entry.get("pattern_before", ""),
                     pattern_after=entry.get("pattern_after", ""),
                     description=entry.get("description", ""),
+                    extra={k: v for k, v in entry.items() if k not in {"id", "domain", "category", "pattern_before", "pattern_after", "description"}},
                 )
                 nodes.append(node)
         return nodes

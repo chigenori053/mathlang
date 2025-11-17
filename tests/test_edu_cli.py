@@ -1,0 +1,11 @@
+from pathlib import Path
+
+from edu.cli import main as edu_main
+
+
+def test_edu_cli_runs_sample(capsys):
+    capsys.readouterr()
+    result = edu_main(["--file", "edu/examples/pythagorean.mlang"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Problem" in captured.out

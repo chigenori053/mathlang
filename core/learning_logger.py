@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
 class LearningLogger:
-    """Collects and serializes step-by-step execution logs."""
+    """Collects and serializes step-by-step execution logs (v2 format)."""
 
     def __init__(self) -> None:
         self.records: List[Dict[str, Any]] = []
+        self._step_index = 0
 
     def record(
         self,
@@ -22,9 +24,15 @@ class LearningLogger:
         status: str,
         rule_id: str | None = None,
         meta: Optional[Dict[str, Any]] = None,
+        step_index: int | None = None,
     ) -> None:
+        idx = step_index if step_index is not None else self._step_index
+        if step_index is None:
+            self._step_index += 1
         self.records.append(
             {
+                "step_index": idx,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "phase": phase,
                 "expression": expression,
                 "rendered": rendered,

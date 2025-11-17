@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from textwrap import dedent
 from typing import Iterable, List
+import re
 
 from . import ast_nodes as ast
 from .errors import SyntaxError
@@ -19,14 +21,18 @@ class Parser:
     """Parse MathLang DSL source text into a ProgramNode."""
 
     def __init__(self, source: str) -> None:
+        normalized_source = dedent(source)
         self._lines = [
             ParsedLine(idx, line.rstrip("\n"))
-            for idx, line in enumerate(source.splitlines(), start=1)
+            for idx, line in enumerate(normalized_source.splitlines(), start=1)
         ]
 
     def parse(self) -> ast.ProgramNode:
         nodes: list[ast.Node] = []
         index = 0
+        problem_seen = False
+        prepare_seen = False
+        step_seen = False
         while index < len(self._lines):
             parsed = self._lines[index]
             raw = parsed.content
@@ -38,12 +44,15 @@ class Parser:
             if keyword == "problem" and has_colon:
                 nodes.append(self._parse_problem(rest.strip(), parsed.number))
                 index += 1
+                problem_seen = True
             elif keyword == "step" and has_colon and rest.strip():
                 nodes.append(self._parse_step_legacy(rest.strip(), tail or None, parsed.number))
                 index += 1
+                step_seen = True
             elif keyword == "step" and has_colon:
                 block_lines, index = self._collect_block(index + 1)
                 nodes.append(self._parse_step_block(block_lines, parsed.number))
+                step_seen = True
             elif keyword == "end" and has_colon:
                 nodes.append(self._parse_end(rest.strip(), parsed.number))
                 index += 1
@@ -68,8 +77,18 @@ class Parser:
                 nodes.append(ast.ModeNode(line=parsed.number, mode=mode_value))
                 index += 1
             elif keyword == "prepare" and has_colon:
-                block_lines, index = self._collect_block(index + 1)
-                nodes.append(ast.PrepareNode(line=parsed.number, statements=self._parse_prepare(block_lines)))
+                if prepare_seen:
+                    raise SyntaxError("Multiple prepare statements are not allowed.")
+                if step_seen:
+                    raise SyntaxError("prepare must appear before steps.")
+                content = rest.strip()
+                if content:
+                    nodes.append(self._parse_prepare_inline(content, parsed.number))
+                    index += 1
+                else:
+                    block_lines, index = self._collect_block(index + 1)
+                    nodes.append(self._parse_prepare_block(block_lines, parsed.number))
+                prepare_seen = True
             elif keyword == "counterfactual" and has_colon:
                 block_lines, index = self._collect_block(index + 1)
                 cf_data = self._parse_mapping(block_lines)
@@ -89,6 +108,8 @@ class Parser:
             raise SyntaxError("Program must contain at least one problem statement.")
         if not any(isinstance(node, ast.EndNode) for node in nodes):
             raise SyntaxError("Program must contain at least one end statement.")
+        if not any(isinstance(node, ast.StepNode) for node in nodes):
+            raise SyntaxError("Program must contain at least one step statement.")
         return program
 
     def _parse_problem(self, content: str, number: int) -> ast.ProblemNode:
@@ -208,7 +229,17 @@ class Parser:
             index += 1
         return nested, index
 
-    def _parse_prepare(self, block_lines: List[str]) -> List[str]:
+    def _parse_prepare_inline(self, content: str, number: int) -> ast.PrepareNode:
+        lower = content.lower()
+        if lower == "auto":
+            return ast.PrepareNode(kind="auto", line=number)
+        if not content:
+            return ast.PrepareNode(kind="empty", line=number)
+        if self._looks_like_directive(content):
+            return ast.PrepareNode(kind="directive", directive=content, line=number)
+        return ast.PrepareNode(kind="expr", expr=content, line=number)
+
+    def _parse_prepare_block(self, block_lines: List[str], number: int) -> ast.PrepareNode:
         statements: List[str] = []
         for raw in block_lines:
             stripped = raw.strip()
@@ -216,7 +247,9 @@ class Parser:
                 continue
             if stripped.startswith("-"):
                 statements.append(stripped[1:].strip())
-        return statements
+        if statements:
+            return ast.PrepareNode(kind="list", statements=statements, line=number)
+        return ast.PrepareNode(kind="empty", line=number)
 
     def _parse_config_options(self, data: dict) -> dict:
         options: dict = {}
@@ -239,3 +272,5 @@ class Parser:
             return int(value)
         except ValueError:
             return value
+    def _looks_like_directive(self, value: str) -> bool:
+        return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\([^()]*\)", value))

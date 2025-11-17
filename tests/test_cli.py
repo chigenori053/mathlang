@@ -19,6 +19,7 @@ def test_cli_runs_inline_code(capsys):
     source = textwrap.dedent(
         """
         problem: 1 + 1
+        step: 2
         end: 2
         """
     )
@@ -28,14 +29,14 @@ def test_cli_runs_inline_code(capsys):
     assert "Problem" in captured.out
 
 
-def test_cli_runs_file(tmp_path: Path, capsys):
+def test_cli_runs_file(capsys):
     capsys.readouterr()
-    script = tmp_path / "sample.mlang"
-    script.write_text("problem: 1 + 1\nend: 2\n", encoding="utf-8")
-    result = main(["--file", str(script)])
+    sample_path = Path("edu/examples/pythagorean.mlang")
+    result = main(["--file", str(sample_path)])
     captured = capsys.readouterr()
     assert result == 0
     assert "End" in captured.out
+    assert "Counterfactual" in captured.out
 
 
 def test_cli_requires_input(capsys):
@@ -48,6 +49,7 @@ def test_cli_prints_fuzzy_on_invalid_step(capsys):
     capsys.readouterr()
     source = textwrap.dedent(
         """
+        mode: fuzzy
         problem: 1 + 1
         step: 3
         end: done
@@ -65,6 +67,9 @@ def test_pro_cli_runs_inline_code(capsys):
     source = textwrap.dedent(
         """
         problem: (x + 1) * (x + 2)
+        prepare:
+            - x = 1
+        step: (x + 1) * (x + 2)
         end: (x + 1) * (x + 2)
         """
     )

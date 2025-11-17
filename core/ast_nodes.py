@@ -175,6 +175,9 @@ class ModeNode(Node):
 
 @dataclass
 class PrepareNode(Node):
+    kind: str = "list"
+    expr: str | None = None
+    directive: str | None = None
     statements: List[str] = field(default_factory=list)
 
 

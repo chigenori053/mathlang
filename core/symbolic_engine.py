@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Dict, Sequence, Set
 
-from .errors import InvalidExprError
+from .errors import InvalidExprError, EvaluationError
 
 try:  # pragma: no cover - SymPy is an optional dependency at import time.
     import sympy as _sympy
@@ -35,15 +35,18 @@ class _FallbackEvaluator:
             raise InvalidExprError(str(exc)) from exc
         return tree
 
-    def evaluate(self, expr: str, values: Dict[str, int]) -> Fraction:
+    def evaluate(self, expr: str, values: Dict[str, Any]) -> Fraction:
         tree = self.parse(expr)
         return self._eval_node(tree.body, values)
 
-    def _eval_node(self, node: py_ast.AST, values: Dict[str, int]) -> Fraction:
+    def _eval_node(self, node: py_ast.AST, values: Dict[str, Any]) -> Fraction:
         if isinstance(node, py_ast.Constant):
             return Fraction(node.value)
         if isinstance(node, py_ast.Name):
-            return Fraction(values.get(node.id, 1))
+            val = values.get(node.id)
+            if val is None:
+                raise EvaluationError(f"Symbol '{node.id}' not defined.")
+            return Fraction(val)
         if isinstance(node, py_ast.BinOp):
             left = self._eval_node(node.left, values)
             right = self._eval_node(node.right, values)
@@ -98,7 +101,14 @@ class SymbolicEngine:
             return self._fallback_is_equiv(expr1, expr2)
         internal1 = self.to_internal(expr1)
         internal2 = self.to_internal(expr2)
-        return bool(_sympy.simplify(internal1 - internal2) == 0)
+        try:
+            diff = _sympy.simplify(internal1 - internal2)
+            if diff == 0:
+                return True
+        except (TypeError, ValueError) as exc:
+            raise EvaluationError(f"Failed to compare expressions: {exc}")
+        return self._numeric_sampling_equiv(expr1, expr2)
+
 
     def _fallback_is_equiv(self, expr1: str, expr2: str) -> bool:
         assert self._fallback is not None
@@ -109,7 +119,7 @@ class SymbolicEngine:
             try:
                 left = self._fallback.evaluate(expr1, subset)
                 right = self._fallback.evaluate(expr2, subset)
-            except InvalidExprError:
+            except (InvalidExprError, EvaluationError):
                 continue
             if left != right:
                 return False
@@ -118,6 +128,28 @@ class SymbolicEngine:
             raise InvalidExprError("Unable to evaluate expressions for comparison.")
         return True
 
+    def _numeric_sampling_equiv(self, expr1: str, expr2: str) -> bool:
+        try:
+            internal1 = self.to_internal(expr1)
+            internal2 = self.to_internal(expr2)
+        except InvalidExprError:
+            raise
+        success = False
+        for assignment in _SAMPLE_ASSIGNMENTS:
+            try:
+                subs1 = {sym: assignment.get(str(sym), 1) for sym in internal1.free_symbols}
+                subs2 = {sym: assignment.get(str(sym), 1) for sym in internal2.free_symbols}
+                val1 = internal1.subs(subs1)
+                val2 = internal2.subs(subs2)
+                if val1.free_symbols or val2.free_symbols:
+                    continue
+                if val1.evalf() != val2.evalf():
+                    return False
+                success = True
+            except Exception:
+                continue
+        return success
+
     def simplify(self, expr: str) -> str:
         if self._fallback is not None:
             try:
@@ -125,10 +157,38 @@ class SymbolicEngine:
                 if value.denominator == 1:
                     return str(value.numerator)
                 return f"{value.numerator}/{value.denominator}"
-            except InvalidExprError:
+            except (InvalidExprError, EvaluationError):
                 return expr
         internal = self.to_internal(expr)
         return str(_sympy.simplify(internal))
+
+    def evaluate(self, expr: str, context: Dict[str, Any]) -> Any:
+        if self._fallback is not None:
+            symbols = self._fallback.symbols(expr)
+            if not context and symbols:
+                return {"not_evaluatable": True}
+            return self._fallback.evaluate(expr, context)
+
+        internal_expr = self.to_internal(expr)
+
+        free_symbols = internal_expr.free_symbols
+        if not context and free_symbols:
+            return {"not_evaluatable": True}
+        undefined_symbols = [s for s in free_symbols if str(s) not in context]
+        if undefined_symbols:
+            raise EvaluationError(f"Undefined symbols: {', '.join(map(str, undefined_symbols))}")
+
+        subs = {s: context.get(str(s)) for s in free_symbols}
+
+        try:
+            result = internal_expr.subs(subs)
+            if not result.free_symbols:
+                simplified = _sympy.simplify(result)
+                return self._to_python_number(simplified)
+            return {"not_evaluatable": True}
+        except Exception as exc:
+            raise EvaluationError(f"Failed to evaluate expression: {exc}")
+
 
     def evaluate_numeric(self, expr: str, assignment: Dict[str, int]) -> Any:
         if self._fallback is not None:
@@ -138,9 +198,35 @@ class SymbolicEngine:
         return internal.subs(subs)
 
     def explain(self, before: str, after: str) -> str:
-        if self.is_equiv(before, after):
-            return "Expressions are equivalent."
+        try:
+            if self.is_equiv(before, after):
+                return "Expressions are equivalent."
+        except EvaluationError:
+            pass # Fallback to simplification comparison
+            
         simplified_before = self.simplify(before)
         simplified_after = self.simplify(after)
         hint = "sympy" if self._fallback is None else "numeric sampling"
         return f"Compared via {hint}: {simplified_before} → {simplified_after}."
+
+    def _to_python_number(self, value: Any) -> Any:
+        if _sympy is None:
+            return value
+        is_integer_attr = getattr(value, "is_integer", None)
+        is_integer = False
+        if callable(is_integer_attr):
+            try:
+                is_integer = bool(is_integer_attr())
+            except Exception:
+                is_integer = False
+        elif is_integer_attr is not None:
+            is_integer = bool(is_integer_attr)
+        if is_integer:
+            try:
+                return int(value)
+            except Exception:
+                pass
+        try:
+            return float(value)
+        except Exception:
+            return value
