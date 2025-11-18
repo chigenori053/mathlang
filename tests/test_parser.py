@@ -18,13 +18,13 @@ end: x^2 + 3*x + 2
 
     problem = program.body[0]
     assert isinstance(problem, ast.ProblemNode)
-    assert problem.expr == "(x + 1) * (x + 2)"
+    assert problem.expr == "(x + 1)*(x + 2)"
     assert problem.line == 3
 
     step = program.body[1]
     assert isinstance(step, ast.StepNode)
     assert step.step_id == "1"
-    assert step.expr == "x^2 + 3*x + 2"
+    assert step.expr == "x**2 + 3*x + 2"
 
     explain = program.body[2]
     assert isinstance(explain, ast.ExplainNode)
@@ -32,7 +32,7 @@ end: x^2 + 3*x + 2
 
     end = program.body[3]
     assert isinstance(end, ast.EndNode)
-    assert end.expr == "x^2 + 3*x + 2"
+    assert end.expr == "x**2 + 3*x + 2"
 
 
 def test_parser_requires_problem_and_end():

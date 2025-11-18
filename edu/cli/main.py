@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional
 
 from cli.base_runner import run_cli
@@ -13,7 +14,11 @@ from cli.output import (
     should_run_causal_analysis,
     rule_metadata_from_registry,
 )
+from cli.scenarios import scenario_loader_from_file
 from edu.dsl import EduParser
+
+SCENARIO_CONFIG = Path(__file__).resolve().parent / "scenarios" / "config.json"
+_load_scenario = scenario_loader_from_file(SCENARIO_CONFIG)
 
 
 def _postprocess(records, knowledge_registry, counterfactual_arg: Optional[str]) -> None:
@@ -31,6 +36,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         symbolic_runner=run_symbolic_mode,
         polynomial_runner=run_polynomial_mode,
         postprocess=_postprocess,
+        scenario_loader=_load_scenario,
     )
 
 

@@ -9,6 +9,7 @@ import re
 
 from . import ast_nodes as ast
 from .errors import SyntaxError
+from .input_parser import MathLangInputParser
 
 
 @dataclass
@@ -92,12 +93,19 @@ class Parser:
             elif keyword == "counterfactual" and has_colon:
                 block_lines, index = self._collect_block(index + 1)
                 cf_data = self._parse_mapping(block_lines)
-                assume = {k: str(v) for k, v in (cf_data.get("assume") or {}).items()}
+                assume = {}
+                for key, value in (cf_data.get("assume") or {}).items():
+                    text = str(value).strip()
+                    if not text:
+                        continue
+                    assume[key] = self._normalize_expr(text)
+                expect_value = cf_data.get("expect")
+                expect = self._normalize_expr(expect_value) if isinstance(expect_value, str) else None
                 nodes.append(
                     ast.CounterfactualNode(
                         line=parsed.number,
                         assume=assume,
-                        expect=(cf_data.get("expect") if isinstance(cf_data.get("expect"), str) else None),
+                        expect=expect,
                     )
                 )
             else:
@@ -113,13 +121,13 @@ class Parser:
         return program
 
     def _parse_problem(self, content: str, number: int) -> ast.ProblemNode:
-        expr = content.strip()
+        expr = self._normalize_expr(content)
         if not expr:
             raise SyntaxError(f"Problem expression required on line {number}.")
         return ast.ProblemNode(expr=expr, line=number)
 
     def _parse_step_legacy(self, content: str, step_id: str | None, number: int) -> ast.StepNode:
-        expr = content.strip()
+        expr = self._normalize_expr(content)
         if not expr:
             raise SyntaxError(f"Step expression required on line {number}.")
         return ast.StepNode(step_id=step_id, expr=expr, line=number)
@@ -131,9 +139,10 @@ class Parser:
         note = data.get("note")
         if not isinstance(after, str) or not after.strip():
             raise SyntaxError(f"Step block missing 'after' expression near line {number}.")
-        node = ast.StepNode(expr=after.strip(), line=number)
+        node = ast.StepNode(expr=self._normalize_expr(after.strip()), line=number)
         if isinstance(before, str):
-            node.before_expr = before.strip()
+            normalized_before = self._normalize_expr(before.strip())
+            node.before_expr = normalized_before
         if isinstance(note, str):
             node.note = note.strip()
         return node
@@ -142,7 +151,7 @@ class Parser:
         expr_text = content.strip()
         if not expr_text or expr_text.lower() == "done":
             return ast.EndNode(expr=None, is_done=True, line=number)
-        return ast.EndNode(expr=expr_text, is_done=False, line=number)
+        return ast.EndNode(expr=self._normalize_expr(expr_text), is_done=False, line=number)
 
     def _parse_explain(self, content: str, number: int) -> ast.ExplainNode:
         raw_text = content.strip()
@@ -237,7 +246,7 @@ class Parser:
             return ast.PrepareNode(kind="empty", line=number)
         if self._looks_like_directive(content):
             return ast.PrepareNode(kind="directive", directive=content, line=number)
-        return ast.PrepareNode(kind="expr", expr=content, line=number)
+        return ast.PrepareNode(kind="expr", expr=self._normalize_statement(content), line=number)
 
     def _parse_prepare_block(self, block_lines: List[str], number: int) -> ast.PrepareNode:
         statements: List[str] = []
@@ -246,7 +255,9 @@ class Parser:
             if not stripped or stripped.startswith("#"):
                 continue
             if stripped.startswith("-"):
-                statements.append(stripped[1:].strip())
+                normalized = self._normalize_statement(stripped[1:].strip())
+                if normalized:
+                    statements.append(normalized)
         if statements:
             return ast.PrepareNode(kind="list", statements=statements, line=number)
         return ast.PrepareNode(kind="empty", line=number)
@@ -272,5 +283,19 @@ class Parser:
             return int(value)
         except ValueError:
             return value
+
+    def _normalize_expr(self, value: str) -> str:
+        return MathLangInputParser.normalize(value)
+
+    def _normalize_statement(self, statement: str) -> str:
+        stripped = statement.strip()
+        if not stripped:
+            return ""
+        if "=" in stripped:
+            name, expr = stripped.split("=", 1)
+            normalized = MathLangInputParser.normalize(expr.strip())
+            return f"{name.strip()} = {normalized}"
+        return MathLangInputParser.normalize(stripped)
+
     def _looks_like_directive(self, value: str) -> bool:
         return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\([^()]*\)", value))

@@ -122,7 +122,7 @@ counterfactual:
     assert any(isinstance(node, CounterfactualNode) for node in program.body)
     cf_node = next(node for node in program.body if isinstance(node, CounterfactualNode))
     assert cf_node.assume == {"x": "5"}
-    assert cf_node.expect == "x * y"
+    assert cf_node.expect == "x*y"
 
 def test_full_v25_example():
     source = """

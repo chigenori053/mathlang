@@ -7,3 +7,11 @@ def test_pro_cli_runs_sample(capsys):
     captured = capsys.readouterr()
     assert result == 0
     assert "Problem" in captured.out
+
+
+def test_pro_cli_runs_scenario(capsys):
+    capsys.readouterr()
+    result = pro_main(["--mode", "causal", "--scenario", "basic"])
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "Problem" in captured.out

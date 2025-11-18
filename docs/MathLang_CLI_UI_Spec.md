@@ -41,6 +41,16 @@ Pro:
 Demo:
   python -m demo.demo_cli --scenario <scenario>
 
+### 3.1 Scenario Configuration
+- Each CLI reads scenario metadata from `scenarios/config.json` directly under its CLI package:
+  - Edu: `edu/cli/scenarios/config.json`
+  - Pro: `pro/cli/scenarios/config.json`
+  - Demo: `demo/scenarios/config.json`
+- Every scenario entry must declare either `file` or `code`. Optional fields:
+  - `mode`: `symbolic`, `polynomial`, or `causal` (alias of symbolic for consistency with specs).
+  - `counterfactual`: JSON dict/string that is forwarded to `--counterfactual`.
+- CI / documentation examples must reference scenarios defined in those files so the commands above always succeed without extra flags.
+
 ## 4. Output Format
 Each CLI must print step-by-step logs including:
 - Before/After

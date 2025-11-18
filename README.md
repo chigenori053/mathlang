@@ -67,9 +67,21 @@ End: 32
 - Run the Edu demo runner: `python -m edu.demo.edu_demo_runner basic_arithmetic`
 - Run the Pro CLI: `python -m pro.cli -c "problem: (x + 1) * (x + 2)\nend: (x + 1) * (x + 2)"`
 - Run the Pro demo runner: `python -m pro.demo_runner counterfactual`
+- Run the Edu CLI by scenario name (see `edu/cli/scenarios/config.json`): `python -m edu.cli.main --scenario arithmetic`
+- Run the Pro CLI scenario: `python -m pro.cli.main --mode causal --scenario basic` (`pro/cli/scenarios/config.json`)
+- Run the Demo CLI minimal scenario: `python -m demo.demo_cli --scenario minimal` (`demo/scenarios/config.json`)
 
 The CLI prints rendered text for every `problem`, `step`, `explain`, and `end` clause. Symbolic mode verifies steps with SymPy and the knowledge registry, while polynomial mode expands expressions before comparing them.  
 エラーが発生した場合は、収集した LearningLogger レコードを元に因果推論エンジンが解析され、`== Causal Analysis ==` セクションとして推定原因と修正候補ステップが追加表示されます。
+
+### Scenario Configuration Files
+Each CLI keeps scenario definitions under its `scenarios/config.json`. These JSON files list `file`, optional `mode` (`symbolic` / `polynomial` / `causal`), and `counterfactual` payloads that `--scenario` picks up automatically:
+
+- Edu: `edu/cli/scenarios/config.json`
+- Pro: `pro/cli/scenarios/config.json`
+- Demo: `demo/scenarios/config.json`
+
+You can add new entries to those files to expose additional `.mlang` programs without changing the CLI flags used by CI.
 
 ## Pro Edition
 プロフェッショナル向け CLI / デモについては `README_PRO.md` を参照。`python -m pro.cli ...` で直接呼び出せます。
@@ -100,6 +112,15 @@ print(logger.to_list())
 ```
 
 An executable walkthrough lives in `notebooks/Learning_Log_Demo.ipynb`, which illustrates how to import the repo modules inside Jupyter and display the collected JSON using `IPython.display.JSON`.
+
+To render the same records as compact human-readable messages (useful for notebooks or debugging), use `core.log_formatter`:
+
+```python
+from core.log_formatter import format_records
+
+for line in format_records(logger.to_list()):
+    print(line)
+```
 
 ## Causal Analysis in Notebooks
 Notebook から因果推論を呼び出す場合は、LearningLogger の記録を `core.causal.integration.run_causal_analysis` に渡すだけです。
