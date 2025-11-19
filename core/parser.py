@@ -21,12 +21,13 @@ class ParsedLine:
 class Parser:
     """Parse MathLang DSL source text into a ProgramNode."""
 
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, *, language: dict | None = None) -> None:
         normalized_source = dedent(source)
         self._lines = [
             ParsedLine(idx, line.rstrip("\n"))
             for idx, line in enumerate(normalized_source.splitlines(), start=1)
         ]
+        self._language = language
 
     def parse(self) -> ast.ProgramNode:
         nodes: list[ast.Node] = []

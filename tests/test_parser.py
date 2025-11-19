@@ -40,3 +40,21 @@ def test_parser_requires_problem_and_end():
         Parser("step: 1 = 1").parse()
     with pytest.raises(SyntaxError):
         Parser("problem: 1 = 1").parse()
+
+
+def test_parser_negative_coefficient_syntax_error():
+    source = """
+problem: 1
+step: x^2-2xy+y^2
+end: 1
+"""
+    program = Parser(source).parse()
+    step_node = program.body[1]
+    print(f"Parsed expression: {step_node.expr}")
+
+
+def test_parser_handles_negative_coefficients():
+    source = "problem: 1\nstep: x^2 - 2*x*y + y^2\nend: 1"
+    program = Parser(source).parse()
+    step_node = program.body[1]
+    assert step_node.expr == "x**2 - 2*x*y + y**2"
