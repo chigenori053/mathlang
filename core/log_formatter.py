@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 
 def format_record_label(record: dict) -> str:
@@ -16,25 +16,23 @@ def format_record_label(record: dict) -> str:
     return "record"
 
 
-def _status_label(value: str | None) -> str:
-    if not value:
-        return "UNKNOWN"
-    value = value.strip()
-    if not value:
-        return "UNKNOWN"
-    if value.lower() == "ok":
-        return "OK"
-    return value.upper()
-
-
 def _expression_for(record: dict) -> str:
     expr = record.get("expression")
     if expr:
-        return expr
+        return str(expr).strip()
     rendered = record.get("rendered")
-    if rendered:
-        return rendered
-    return ""
+    if not rendered:
+        return ""
+    rendered_text = str(rendered).strip()
+    phase = (record.get("phase") or "").strip().lower()
+    if phase:
+        prefix = f"{phase}:"
+        lowered = rendered_text.lower()
+        if lowered.startswith(prefix):
+            remainder = rendered_text[len(prefix) :].lstrip()
+            if remainder:
+                return remainder
+    return rendered_text
 
 
 def format_record_message(record: dict, *, include_meta: bool = True) -> List[str]:
@@ -42,25 +40,20 @@ def format_record_message(record: dict, *, include_meta: bool = True) -> List[st
 
     label = format_record_label(record)
     expr = _expression_for(record)
-    status = _status_label(record.get("status"))
-    base = f"[{label}] {expr}".rstrip()
-    if expr:
-        base = f"{base} [{status}]"
-    else:
-        base = f"[{label}] [{status}]"
+    base = f"{label}: {expr}".rstrip() if expr else f"{label}:"
     lines: List[str] = [base]
     if not include_meta:
         return lines
     meta = record.get("meta") or {}
     reason = meta.get("reason")
     if reason:
-        lines.append(f"[message] {reason}")
+        lines.append(f"message: {reason}")
     explanation = meta.get("explanation")
     if explanation:
-        lines.append(f"[explain] {explanation}")
+        lines.append(f"explain: {explanation}")
     expected = meta.get("expected")
     if expected:
-        lines.append(f"[expected] {expected}")
+        lines.append(f"expected: {expected}")
     return lines
 
 

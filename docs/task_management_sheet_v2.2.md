@@ -8,21 +8,20 @@
 ### High Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
-| DSL-06 | DSL v2.5 ブロック完全対応 | `MathLang_Core_DSL_v2.5_Spec.md` 第4〜5章で定義されている `meta/config/mode/prepare/counterfactual` ブロックを Parser→AST→Evaluator まで一貫したフローで処理し、旧来の `step1:` 形式とも両立させる | Day15 | 未着手 |
-| DSL-07 | DSL v2.5 サンプル＆シナリオ刷新 | `edu/examples/` / `pro/examples/` / `docs/demo/*.md` 内のサンプルを v2.5 構文に差し替え、`prepare` や `counterfactual`、`note` を含む代表ケースを CLI/Notebook から実行できるようにする | Day16 | 未着手 |
+| DSL-06 | DSL v2.5 ブロック完全対応 | `MathLang_Core_DSL_v2.5_Spec.md` 第4〜5章で定義されている `meta/config/mode/prepare/counterfactual` ブロックを Parser→AST→Evaluator まで一貫したフローで処理し、旧来の `step1:` 形式とも両立させる | Day15 | ✅ 完了 |
+| DSL-07 | DSL v2.5 サンプル＆シナリオ刷新 | `edu/examples/` / `pro/examples/` / `docs/demo/*.md` 内のサンプルを v2.5 構文に差し替え、`prepare` や `counterfactual`、`note` を含む代表ケースを CLI/Notebook から実行できるようにする | Day16 | ✅ 完了 |
 
 ### Medium Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
-| DSL-08 | DSL ドキュメント同期 | README / `docs/MathLang_Core_DSL_v2.5_Spec.md` / `edu/README.md` に掲載された例示コード・構文チャート・FAQ を横並びで更新し、参照先による仕様差分を解消する | Day17 | 未着手 |
-| DSL-09 | DSL schema テスト強化 | `tests/test_parser_v25.py` に `meta`・`config`・`prepare`・`counterfactual` の組み合わせパターンを追加し、AST スナップショットを導入してリグレッション検知を強化する | Day17 | 未着手 |
+| DSL-08 | DSL ドキュメント同期 | README / `docs/MathLang_Core_DSL_v2.5_Spec.md` / `edu/README.md` に掲載された例示コード・構文チャート・FAQ を横並びで更新し、参照先による仕様差分を解消する | Day17 | ✅ 完了 |
+| DSL-09 | DSL schema テスト強化 | `tests/test_parser_v25.py` に `meta`・`config`・`prepare`・`counterfactual` の組み合わせパターンを追加し、AST スナップショットを導入してリグレッション検知を強化する | Day17 | ✅ 完了 |
 
 ### Low Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
 | DSL-10 | DSL LSP/補完計画 v2 | v2.5 で増加した DSL セクションを対象に、補完/LSP 対応 PoC の要求事項とエディタ別の優先順位を整理した計画書を作成する | Day20 | 未着手 |
-
-未完タスク: DSL-06, DSL-07, DSL-08, DSL-09, DSL-10
+未完タスク: DSL-10
 
 ---
 
@@ -45,10 +44,10 @@
 ### Low Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
-| CORE-07 | グラフ可視化パイプライン | `graph_to_text/dot` を Notebook/CLI から利用するパイプラインを整備し、Causal Spec 6章の可視化要件を満たす | Day18 | 未着手 |
-| CORE-08 | Counterfactual シナリオ集 | `docs/demo/` および `edu/pro/examples/` に再利用可能な介入テンプレートを整備し、CLI の `--counterfactual` から選択・実行できるようにする | Day19 | 未着手 |
+| CORE-07 | グラフ可視化パイプライン | `graph_to_text/dot` を Notebook/CLI から利用するパイプラインを整備し、Causal Spec 6章の可視化要件を満たす | Day18 | ✅ 完了 |
+| CORE-08 | Counterfactual シナリオ集 | `docs/demo/` および `edu/pro/examples/` に再利用可能な介入テンプレートを整備し、CLI の `--counterfactual` から選択・実行できるようにする | Day19 | ✅ 完了 |
 
-未完タスク: CORE-07, CORE-08
+未完タスク: なし
 
 ---
 
@@ -66,7 +65,7 @@
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
 | UICLI-05 | Notebook テンプレ整備 | `edu/notebooks/edu_intro.ipynb` など教育向け 2 本、`pro/notebooks/pro_intro_causal.ipynb` など研究向け 2 本の計 4 本を作成し、Core API と UI ヘルパーの使い方を解説する | Day18 | 未着手 |
-| UICLI-06 | Demo ドキュメント刷新 | `docs/demo/*.md` を新 CLI／ディレクトリ構成に合わせて更新し、スクリーンショットとログ例を差し替える | Day18 | 未着手 |
+| UICLI-06 | Demo ドキュメント刷新 | `docs/demo/*.md` を新 CLI／ディレクトリ構成に合わせて更新し、スクリーンショットとログ例を差し替える | Day18 | ✅ 完了 |
 
 ### Low Priority
 | ID | タスク | 内容 | 期限 | 状態 |
@@ -74,7 +73,7 @@
 | UICLI-07 | UI テーマ設定反映 | `edu/config/edu_ui_settings.yaml` と `pro/config/pro_settings.yaml` のテーマ情報を UI レイヤーで読み込み、Notebook/CLI から切り替え可能にする | Day20 | 未着手 |
 | UICLI-08 | シナリオ作成ツール | `edu/lessons/` や `pro/examples/` を自動生成できる簡易スクリプト／テンプレ CLI を `tools/` に追加する | Day21 | 未着手 |
 
-未完タスク: UICLI-05, UICLI-06, UICLI-07, UICLI-08
+未完タスク: UICLI-05, UICLI-07, UICLI-08
 
 ---
 
@@ -96,12 +95,11 @@
 ---
 
 ### コメント
-> UI/CLI 再編と Evaluator v2／Logger／Causal の大規模改修が同時進行になるため、まずディレクトリ構造とランナーの骨格を固め、その後ログ仕様の互換テストを整備する。DSL v2.5 のサンプル刷新と Notebook／lesson 群の整備は CLI 仕様固めと並行して進める。CI では CLI 3 系統と主要 pytest を常時実行し、構造変更によるリグレッションを即座に検知する体制を敷く。
+> DSL v2.5 フロー（Parser→Evaluator→CLI）、CausalEngine、Counterfactual、自動シナリオ周りは一通り整備済み。今後は notebooks/lessons の中身と UI 設定連携、シナリオ自動生成ツールを埋めていくことで Edu/Pro UI 側の価値を高める段階。
 
 ---
 
 ### サマリー
-- MathLang Core は DSL v2.5／Causal Engine／CLI 仕様群（Integrated Spec、UI Directory Spec、CLI UI Spec、Evaluator v2 Spec、Causal Spec v1）に沿った大規模アップデートに着手する段階であり、既存コードは旧構成（単一 CLI・Logger v1）のままなので、新仕様への移行タスクを優先度別に整理した。  
-- DSL 面では Parser に必要な部品が揃っている一方で、AST→Evaluator→サンプルの一貫性やドキュメント同期が未着手であるため、DSL-06〜09 で仕様適合とテスト拡充を実施する。  
-- Core では Evaluator v2 と LearningLogger v2 が未実装で、CausalEngine/Counterfactual も Spec v1 と差分が残っているため、CORE-01〜04 を最優先で進め、Polynomial/Fuzzy/KnowledgeRegistry への波及は CORE-05/06 で吸収する。  
-- UI/CLI では edu/pro/demos のディレクトリ再編や CLI 3 系統、CI テストが未整備のため、UICLI-01〜04 を Day15-16 で完了させ、その後 Notebook・ドキュメント・テーマ連携（UICLI-05〜08）に派生させる計画。
+- DSL v2.5 の `meta/config/mode/prepare/counterfactual` パイプラインは Parser・AST・Evaluator v2・PolynomialEvaluator まで反映済みで、`edu/pro/examples/*.mlang` や `docs/demo/*` も全て v2.5 サンプルへ刷新済み。`tests/test_parser_v25.py` など 77 件の pytest もグリーンでシンタックス回帰をカバーしている。  
+- Core コンポーネントは LearningLogger v2・Evaluator v2・FuzzyJudge 連携・CausalEngine（グラフ可視化/カウンターファクト）・`cli/output.py` の self-test を含む CLI 後処理まで統合され、`--counterfactual` やシナリオファイル経由で一貫して動作。  
+- 現在の未完タスクは Edu/Pro Notebook の本体執筆、UI テーマ設定の実装、シナリオ自動生成ツールの追加に絞られており、UI/学習ガイド面の充実に焦点を移すフェーズ。

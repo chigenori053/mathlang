@@ -121,6 +121,23 @@ from core.log_formatter import format_records
 for line in format_records(logger.to_list()):
     print(line)
 ```
+Output:
+```
+problem: (3 + 5) * 4
+step1: 8 * 4
+step2: 32
+end: 32
+```
+
+Looking for quick notebook inputs? `notebooks/sample_programs.py` ships multiple reusable MathLang snippets:
+
+```python
+from notebooks.sample_programs import get_sample_program
+
+sample = get_sample_program("binomial_square")
+print(sample.description)
+source = sample.source
+```
 
 ## Causal Analysis in Notebooks
 Notebook から因果推論を呼び出す場合は、LearningLogger の記録を `core.causal.integration.run_causal_analysis` に渡すだけです。
