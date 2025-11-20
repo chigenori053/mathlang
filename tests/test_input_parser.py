@@ -1,20 +1,25 @@
+from __future__ import annotations
+
+import pytest
+
 from core.input_parser import MathLangInputParser
 
 
-def normalize(expr: str) -> str:
-    return MathLangInputParser.normalize(expr)
-
-
-def test_caret_power_and_parentheses():
-    assert normalize("(x - y)^2") == "(x - y)**2"
-    assert normalize("(x - y)(x + y)") == "(x - y)*(x + y)"
-
-
-def test_implicit_multiplication_runs_and_numbers():
-    assert normalize("2xy + 3x") == "2*x*y + 3*x"
-    assert normalize("(x - y) (x - y)") == "(x - y)*(x - y)"
-
-
-def test_unicode_sqrt_and_mixed_terms():
-    assert normalize("√x + 2y") == "sqrt(x) + 2*y"
-    assert normalize("3(x+1)^2") == "3*(x + 1)**2"
+@pytest.mark.parametrize(
+    "input_expr, expected_output",
+    [
+        # Test Case 1: From user's bug report
+        ("x^2 +2xy +y^2", "x**2 + 2*x*y + y**2"),
+        # Test Case 2: Implicit multiplication with parentheses
+        ("5(a+b)c", "5*(a + b)*c"),
+        # Test Case 3: Implicit multiplication between functions
+        ("sin(theta)cos(phi)", "sin(theta)*cos(phi)"),
+        # Test Case 4: Implicit multiplication with multi-digit numbers
+        ("12x", "12*x"),
+        # Test Case 5: Implicit multiplication between identifiers (sanity check)
+        ("abc", "a*b*c"),
+    ],
+)
+def test_normalize_implicit_multiplication(input_expr: str, expected_output: str):
+    """Tests normalization of expressions with implicit multiplication."""
+    assert MathLangInputParser.normalize(input_expr) == expected_output

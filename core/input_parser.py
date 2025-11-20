@@ -106,11 +106,42 @@ class MathLangInputParser:
     @staticmethod
     def split_concatenated_identifiers(tokens: List[str]) -> List[str]:
         result: List[str] = []
-        for token in tokens:
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+
+            # If we see a known function, we assume the following (...) block contains non-splittable identifiers.
+            if token in MathLangInputParser._KNOWN_FUNCTIONS and i + 1 < len(tokens) and tokens[i+1] == '(':
+                result.append(token) # func name
+                result.append('(')   # open paren
+                i += 2
+                
+                paren_depth = 1
+                # We need to handle the case of no arguments, e.g. func()
+                if i < len(tokens) and tokens[i] == ')':
+                    result.append(')')
+                    i += 1
+                    continue
+
+                while i < len(tokens):
+                    inner_token = tokens[i]
+                    if inner_token == '(':
+                        paren_depth += 1
+                    elif inner_token == ')':
+                        paren_depth -= 1
+
+                    # Add all tokens inside parens without splitting
+                    result.append(inner_token)
+                    i += 1
+                    if paren_depth == 0:
+                        break
+                continue
+
             if MathLangInputParser._should_split_identifier(token):
                 result.extend(list(token))
             else:
                 result.append(token)
+            i += 1
         return result
 
     @staticmethod

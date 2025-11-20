@@ -1,105 +1,44 @@
-# MathLang Task Management Sheet v2.2
-## フォーカス: Edu/Pro UI/CLI 仕様順守と Evaluator v2 展開
+# MathLang Task Management Sheet v2.3
+## フォーカス: Core Extended (Computation / Validation / Hinting) 実装
 
 ---
 
-## DSL タスク
+## Core Extended タスク
 
 ### High Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
-| DSL-06 | DSL v2.5 ブロック完全対応 | `MathLang_Core_DSL_v2.5_Spec.md` 第4〜5章で定義されている `meta/config/mode/prepare/counterfactual` ブロックを Parser→AST→Evaluator まで一貫したフローで処理し、旧来の `step1:` 形式とも両立させる | Day15 | ✅ 完了 |
-| DSL-07 | DSL v2.5 サンプル＆シナリオ刷新 | `edu/examples/` / `pro/examples/` / `docs/demo/*.md` 内のサンプルを v2.5 構文に差し替え、`prepare` や `counterfactual`、`note` を含む代表ケースを CLI/Notebook から実行できるようにする | Day16 | ✅ 完了 |
+| EXT-01 | ComputationEngine 実装 | `SymbolicEngine` および `SymPy` をラップし、`numeric_eval` や `simplify` を提供する `ComputationEngine` を実装する | Day22 | 完了 |
+| EXT-02 | ValidationEngine 実装 | `ExerciseSpec` に基づき、数式の等価性判定や形式チェックを行う `ValidationEngine` を実装する | Day22 | 完了 |
+| EXT-03 | HintEngine 実装 | 誤答パターンやシンボリックな差分に基づいてヒントを生成する `HintEngine` を実装する | Day23 | 完了 |
+| EXT-04 | CoreRuntime & Evaluator 統合 | 3つのエンジンを統合する `CoreRuntime` を実装し、既存の `Evaluator` から呼び出せるようにする | Day23 | 完了 |
 
 ### Medium Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
-| DSL-08 | DSL ドキュメント同期 | README / `docs/MathLang_Core_DSL_v2.5_Spec.md` / `edu/README.md` に掲載された例示コード・構文チャート・FAQ を横並びで更新し、参照先による仕様差分を解消する | Day17 | ✅ 完了 |
-| DSL-09 | DSL schema テスト強化 | `tests/test_parser_v25.py` に `meta`・`config`・`prepare`・`counterfactual` の組み合わせパターンを追加し、AST スナップショットを導入してリグレッション検知を強化する | Day17 | ✅ 完了 |
+| EXT-05 | ExerciseSpec I/O | `ExerciseSpec` の JSON/YAML 入出力スキーマを定義・実装し、問題定義を外部ファイルから読み込めるようにする | Day24 | 完了 |
+| EXT-06 | CLI/Notebook デモ | 新しい Core Extended 機能（計算・検証・ヒント）を利用した CLI コマンドおよび Notebook デモを作成する | Day24 | 完了 |
+| EXT-07 | UnitEngine 実装 | Core アーキテクチャに基づき、単位変換・次元解析を行う `UnitEngine` を実装する | Day24 | 完了 |
+
+---
+
+## 残存タスク (v2.2より継続)
+
+### Medium Priority
+| ID | タスク | 内容 | 期限 | 状態 |
+|----|---------|------|------|------|
+| UICLI-05 | Notebook テンプレ整備 | `edu/notebooks/edu_intro.ipynb` など教育向け 2 本、`pro/notebooks/pro_intro_causal.ipynb` など研究向け 2 本の計 4 本を作成し、Core API と UI ヘルパーの使い方を解説する | Day18 | 完了 |
 
 ### Low Priority
 | ID | タスク | 内容 | 期限 | 状態 |
 |----|---------|------|------|------|
 | DSL-10 | DSL LSP/補完計画 v2 | v2.5 で増加した DSL セクションを対象に、補完/LSP 対応 PoC の要求事項とエディタ別の優先順位を整理した計画書を作成する | Day20 | 未着手 |
-未完タスク: DSL-10
-
----
-
-## Core タスク
-
-### High Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
-| CORE-01 | Evaluator v2 状態機械 | `docs/Evaluator_v2_Specification.md` に定義された ok/mistake/fatal ログ仕様と `run()` の挙動を `core/evaluator.py` に反映し、新ステートマシンで fatal 発生時に停止・bool を返すよう実装する | Day15 | ✅ 完了 |
-| CORE-02 | LearningLogger v2 | `core/learning_logger.py` を Spec 5.1 の形式（`step_index` / `phase` / `status` / `rule_id` / timestamp）へ再設計し、Evaluator・CLI・Notebook からの呼び出しコードをすべて更新する | Day15 | ✅ 完了 |
-| CORE-03 | CausalEngine/CF 仕上げ | `core/causal/*.py` を Causal Spec v1（node/edge/why_error/counterfactual_result）と一致させ、`tests/test_causal_engine.py` / `tests/test_causal_integrations.py` が最新ログ構造で成功するよう整備する | Day16 | ✅ 完了 |
-| CORE-04 | Config/Mode 反映 | DSL の `config:` / `mode:` 情報を Evaluator・Fuzzy・Causal・Polynomial 各モードに反映させ、CLI/Notebook から `strict` / `fuzzy` / `causal` / `cf` を切り替えられるようにする | Day16 | ✅ 完了 |
-
-### Medium Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
-| CORE-05 | Polynomial/Fuzzy 同期 | `core/polynomial_evaluator.py` と FuzzyJudge 連携を v2 ログ構造へ揃え、`tests/test_polynomial_evaluator.py` を含む関連テストを更新してリグレッションを防ぐ | Day17 | ✅ 完了 |
-| CORE-06 | KnowledgeRegistry メタ情報拡張 | ルール記述やカテゴリを CausalEngine に渡すため `core/knowledge_registry.py` を拡張し、`run_causal_analysis` の `rule_details` 出力を保証する | Day17 | ✅ 完了 |
-
-### Low Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
-| CORE-07 | グラフ可視化パイプライン | `graph_to_text/dot` を Notebook/CLI から利用するパイプラインを整備し、Causal Spec 6章の可視化要件を満たす | Day18 | ✅ 完了 |
-| CORE-08 | Counterfactual シナリオ集 | `docs/demo/` および `edu/pro/examples/` に再利用可能な介入テンプレートを整備し、CLI の `--counterfactual` から選択・実行できるようにする | Day19 | ✅ 完了 |
-
-未完タスク: なし
-
----
-
-## UI/CLI タスク
-
-### High Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
-| UICLI-01 | edu/ ディレクトリ再編 | `docs/MathLang UI Directory Specification.md` 第3章に沿って `edu/ui/` `edu/notebooks/` `edu/lessons/` `edu/demo/` を整備し、ランナー・設定ファイル・README を配置する | Day15 | ✅ 完了 |
-| UICLI-02 | pro/ ディレクトリ再編 | 同仕様書第4章どおりに `pro/api/` `pro/tools/` `pro/notebooks/` `pro/demo/` `pro/config/` を揃え、研究向けサンプルと README を用意する | Day15 | ✅ 完了 |
-| UICLI-03 | CLI 3 系統実装 | `docs/MathLang_CLI_UI_Spec.md` の構成に従い `edu/cli/main.py`、`pro/cli/main.py`、`demo/demo_cli.py`＋`scenarios/` を実装し、共通 `_run_cli` をモジュール化する | Day16 | ✅ 完了 |
-| UICLI-04 | CLI self-test & CI | `tests/test_edu_cli.py` / `tests/test_pro_cli.py` / `tests/test_demo_cli.py` を追加し、GitHub Actions で Spec 第6章に記載された 3 コマンドを実行する CI を構築する | Day16 | ✅ 完了 |
-
-### Medium Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
-| UICLI-05 | Notebook テンプレ整備 | `edu/notebooks/edu_intro.ipynb` など教育向け 2 本、`pro/notebooks/pro_intro_causal.ipynb` など研究向け 2 本の計 4 本を作成し、Core API と UI ヘルパーの使い方を解説する | Day18 | 未着手 |
-| UICLI-06 | Demo ドキュメント刷新 | `docs/demo/*.md` を新 CLI／ディレクトリ構成に合わせて更新し、スクリーンショットとログ例を差し替える | Day18 | ✅ 完了 |
-
-### Low Priority
-| ID | タスク | 内容 | 期限 | 状態 |
-|----|---------|------|------|------|
 | UICLI-07 | UI テーマ設定反映 | `edu/config/edu_ui_settings.yaml` と `pro/config/pro_settings.yaml` のテーマ情報を UI レイヤーで読み込み、Notebook/CLI から切り替え可能にする | Day20 | 未着手 |
 | UICLI-08 | シナリオ作成ツール | `edu/lessons/` や `pro/examples/` を自動生成できる簡易スクリプト／テンプレ CLI を `tools/` に追加する | Day21 | 未着手 |
 
-未完タスク: UICLI-05, UICLI-07, UICLI-08
-
 ---
 
-### 廃止／凍結タスク
-| ID | 内容 | 理由 |
-|----|------|------|
-| EXT-01 | 微分・行列拡張 | デモ版スコープ外 |
-| DOC-02 | 日本語 UI ガイド | Core デモ完成後に再開 |
-
----
-
-### 成功基準
-- `edu/` と `pro/` のディレクトリが UI Spec v0.1 の必須ファイルを満たし、README と Notebook から動作確認できる  
-- CLI (`python -m edu.cli.main --scenario`, `python -m pro.cli.main --mode causal`, `python -m demo.demo_cli`) が Spec 第3〜4章通りの出力形式で動作し、CI で自動検証される  
-- Evaluator v2 / LearningLogger v2 / CausalEngine v1 が Spec に定義されたログ形式（ok/mistake/fatal + step_index + rule_id）を共有し、counterfactual 実行も CLI オプションから呼び出せる  
-- `tests/test_parser_v25.py`、`tests/test_causal_*`、`tests/test_edu_cli.py` など 53 件超の pytest がすべて成功する  
-- `docs/demo/*` および README 群が最新ワークフロー（DSL v2.5 → CLI/Notebook → causal/counterfactual）を説明する
-
----
-
-### コメント
-> DSL v2.5 フロー（Parser→Evaluator→CLI）、CausalEngine、Counterfactual、自動シナリオ周りは一通り整備済み。今後は notebooks/lessons の中身と UI 設定連携、シナリオ自動生成ツールを埋めていくことで Edu/Pro UI 側の価値を高める段階。
-
----
-
-### サマリー
-- DSL v2.5 の `meta/config/mode/prepare/counterfactual` パイプラインは Parser・AST・Evaluator v2・PolynomialEvaluator まで反映済みで、`edu/pro/examples/*.mlang` や `docs/demo/*` も全て v2.5 サンプルへ刷新済み。`tests/test_parser_v25.py` など 77 件の pytest もグリーンでシンタックス回帰をカバーしている。  
-- Core コンポーネントは LearningLogger v2・Evaluator v2・FuzzyJudge 連携・CausalEngine（グラフ可視化/カウンターファクト）・`cli/output.py` の self-test を含む CLI 後処理まで統合され、`--counterfactual` やシナリオファイル経由で一貫して動作。  
-- 現在の未完タスクは Edu/Pro Notebook の本体執筆、UI テーマ設定の実装、シナリオ自動生成ツールの追加に絞られており、UI/学習ガイド面の充実に焦点を移すフェーズ。
+## 開発状況サマリー
+- **完了済み**: DSL v2.5 対応、Evaluator v2、LearningLogger v2、CausalEngine v1、CLI 基本実装 (v2.2 までの主要タスク)
+- **現在**: `MathLang_Core_Extended_Spec.md` に基づく Core 機能の拡張フェーズ。計算・検証・ヒント生成機能の追加を行い、教育利用におけるフィードバック機能を強化する。
+- **次ステップ**: `ComputationEngine` から順次実装を開始し、`CoreRuntime` で統合する。

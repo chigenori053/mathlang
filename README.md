@@ -139,6 +139,25 @@ print(sample.description)
 source = sample.source
 ```
 
+## Notebook Cell Magic
+Jupyter 上で DSL をそのままタイプして実行したい場合は、専用マジックを読み込んで `problem:`/`step:`/`end:` を直接入力できます。
+
+1. `%load_ext tools.notebook_magic`
+2. DSL セルの先頭に `%%mathlang [--mode symbolic|polynomial] [--no-meta]`
+3. 以降の行に DSL を記述して実行
+
+例:
+```text
+%load_ext tools.notebook_magic
+
+%%mathlang
+problem: (x - y)^2
+step1: (x - y)(x - y)
+step: x^2 -2xy +y^2
+end: done
+```
+`x^2` や `2xy`、`(x - y)(x - y)` のような人間向け表記は自動で `x**2` / `2*x*y` / `(x - y)*(x - y)` に正規化され、SyntaxError を気にせず Notebook 上で MathLang を検証できます。
+
 ## Causal Analysis in Notebooks
 Notebook から因果推論を呼び出す場合は、LearningLogger の記録を `core.causal.integration.run_causal_analysis` に渡すだけです。
 
