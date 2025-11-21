@@ -29,6 +29,10 @@ class Engine:
     def set_variable(self, name: str, value: Any) -> None:  # pragma: no cover
         raise NotImplementedError
 
+    def add_scenario(self, name: str, context: Dict[str, Any]) -> None:  # pragma: no cover
+        """Add a scenario context."""
+        pass
+
     def evaluate(self, expr: str, context: Optional[Dict[str, Any]] = None) -> Any:  # pragma: no cover
         raise NotImplementedError
 
@@ -49,6 +53,11 @@ class SymbolicEvaluationEngine(Engine):
 
     def set_variable(self, name: str, value: Any) -> None:
         self._context[name] = value
+
+    def add_scenario(self, name: str, context: Dict[str, Any]) -> None:
+        # SymbolicEvaluationEngine doesn't support scenarios natively yet, 
+        # but we can ignore or log warning. For now, just pass.
+        pass
 
     def evaluate(self, expr: str, context: Optional[Dict[str, Any]] = None) -> Any:
         eval_context = self._context.copy()
@@ -166,6 +175,8 @@ class Evaluator:
                 self._handle_explain(node)
             elif isinstance(node, ast.CounterfactualNode):
                 self._handle_counterfactual(node)
+            elif isinstance(node, ast.ScenarioNode):
+                self._handle_scenario(node)
             else:  # pragma: no cover - defensive block.
                 raise SyntaxError(f"Unsupported node type: {type(node)}")
         if self._state != "END":
@@ -455,6 +466,39 @@ class Evaluator:
                 rendered=f"Counterfactual evaluation failed: {node.expect}",
                 exc=exc,
             )
+
+    def _handle_scenario(self, node: ast.ScenarioNode) -> None:
+        context = {}
+        for name, expr in node.assignments.items():
+            try:
+                value = self.engine.evaluate(expr)
+                if isinstance(value, dict) and value.get("not_evaluatable"):
+                    # Warn but continue? Or fail?
+                    # For scenarios, we probably want concrete values.
+                    self.learning_logger.record(
+                        phase="scenario",
+                        expression=expr,
+                        rendered=f"Scenario assignment skipped (not evaluatable): {name} = {expr}",
+                        status="warning",
+                    )
+                    continue
+                context[name] = value
+            except EvaluationError as exc:
+                self._fatal(
+                    phase="scenario",
+                    expression=expr,
+                    rendered=f"Scenario assignment failed: {name} = {expr}",
+                    exc=exc,
+                )
+        
+        self.engine.add_scenario(node.name, context)
+        self.learning_logger.record(
+            phase="scenario",
+            expression=None,
+            rendered=f"Scenario added: {node.name}",
+            status="ok",
+            meta={"context": context},
+        )
 
     def _run_fuzzy_judge(
         self,

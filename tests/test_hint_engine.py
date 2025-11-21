@@ -30,12 +30,12 @@ def test_pattern_matching_hint(hint_engine):
     )
     
     # Test first pattern
-    result = hint_engine.generate_hint("x**2 + 1", spec)
+    result = hint_engine.generate_hint_for_spec("x**2 + 1", spec)
     assert result.hint_type == "pattern_match"
     assert result.message == "Did you forget the middle term?"
     
     # Test second pattern
-    result = hint_engine.generate_hint("x**2 + 2*x", spec)
+    result = hint_engine.generate_hint_for_spec("x**2 + 2*x", spec)
     assert result.hint_type == "pattern_match"
     assert result.message == "Don't forget the constant term."
 
@@ -46,7 +46,7 @@ def test_heuristic_sign_error(hint_engine):
     )
     
     # User enters -(x - 5) which is -x + 5
-    result = hint_engine.generate_hint("-x + 5", spec)
+    result = hint_engine.generate_hint_for_spec("-x + 5", spec)
     assert result.hint_type == "heuristic_sign_error"
     assert "sign error" in result.message.lower()
 
@@ -57,7 +57,7 @@ def test_heuristic_constant_offset(hint_engine):
     )
     
     # User enters x + 12 (off by 2)
-    result = hint_engine.generate_hint("x + 12", spec)
+    result = hint_engine.generate_hint_for_spec("x + 12", spec)
     assert result.hint_type == "heuristic_constant_offset"
     assert "constant amount" in result.message
     assert float(result.details["offset"]) == 2.0
@@ -69,7 +69,7 @@ def test_fallback_hint(hint_engine):
     )
     
     # Random wrong answer
-    result = hint_engine.generate_hint("x + 5", spec)
+    result = hint_engine.generate_hint_for_spec("x + 5", spec)
     assert result.hint_type == "none"
     assert "checking your steps" in result.message.lower()
 
@@ -79,7 +79,7 @@ def test_syntax_error_hint(hint_engine):
         target_expression="x"
     )
     
-    result = hint_engine.generate_hint("x +", spec)
+    result = hint_engine.generate_hint_for_spec("x +", spec)
     assert result.hint_type == "syntax_error"
 
 def test_pattern_matching_with_equivalence(hint_engine):
@@ -93,6 +93,6 @@ def test_pattern_matching_with_equivalence(hint_engine):
     )
     
     # User enters x*2 which is equivalent to 2*x
-    result = hint_engine.generate_hint("x*2", spec)
+    result = hint_engine.generate_hint_for_spec("x*2", spec)
     assert result.hint_type == "pattern_match"
     assert result.message == "You differentiated instead of squaring."

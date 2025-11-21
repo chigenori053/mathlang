@@ -10,6 +10,7 @@ from .validation_engine import ValidationEngine
 from .hint_engine import HintEngine
 from .exercise_spec import ExerciseSpec
 from .learning_logger import LearningLogger
+from .knowledge_registry import KnowledgeRegistry
 from .errors import MissingProblemError, MathLangError
 
 
@@ -30,6 +31,7 @@ class CoreRuntime(Engine):
         hint_engine: HintEngine,
         exercise_spec: Optional[ExerciseSpec] = None,
         learning_logger: Optional[LearningLogger] = None,
+        knowledge_registry: Optional[KnowledgeRegistry] = None,
     ):
         """
         Initialize the CoreRuntime.
@@ -46,9 +48,11 @@ class CoreRuntime(Engine):
         self.hint_engine = hint_engine
         self.exercise_spec = exercise_spec
         self.learning_logger = learning_logger or LearningLogger()
+        self.knowledge_registry = knowledge_registry
         
         self._current_expr: str | None = None
         self._context: Dict[str, Any] = {}
+        self._scenarios: Dict[str, Dict[str, Any]] = {}
 
     def set(self, expr: str) -> None:
         """
@@ -70,6 +74,16 @@ class CoreRuntime(Engine):
         """
         self._context[name] = value
         self.computation_engine.bind(name, value)
+
+    def add_scenario(self, name: str, context: Dict[str, Any]) -> None:
+        """
+        Add a scenario with a specific context.
+        
+        Args:
+            name: Scenario name
+            context: Variable assignments for this scenario
+        """
+        self._scenarios[name] = context
 
     def evaluate(self, expr: str, context: Optional[Dict[str, Any]] = None) -> Any:
         """
@@ -100,44 +114,77 @@ class CoreRuntime(Engine):
         before = self._current_expr
         after = expr
         
+        # Default validation (symbolic)
         # Apply context if variables are bound
         if self._context:
-            # Use computation engine to substitute variables
-            # We catch errors in case substitution fails (e.g. partial)
             try:
                 before_eval = self.computation_engine.substitute(before, self._context)
                 after_eval = self.computation_engine.substitute(after, self._context)
             except Exception:
-                # Fallback to original if substitution fails
                 before_eval = before
                 after_eval = after
         else:
             before_eval = before
             after_eval = after
         
-        # check equivalence using computation engine
-        # We use simplify/is_equiv from symbolic engine via computation engine
-        # But ComputationEngine doesn't expose is_equiv directly, let's use symbolic_engine
-        is_valid = self.computation_engine.symbolic_engine.is_equiv(before_eval, after_eval)
+        is_valid_symbolic = self.computation_engine.symbolic_engine.is_equiv(before_eval, after_eval)
+        
+        # Scenario validation
+        scenario_results = {}
+        is_valid_scenarios = True
+        if self._scenarios:
+            scenario_results = self.computation_engine.check_equivalence_in_scenarios(
+                before, after, self._scenarios
+            )
+            is_valid_scenarios = all(scenario_results.values())
+        
+        # Combine results
+        # If scenarios are present, they override symbolic check if symbolic check is ambiguous?
+        # Or should we require BOTH?
+        # Usually symbolic implies numeric, but numeric doesn't imply symbolic.
+        # However, if scenarios are explicitly defined, the user likely wants to verify against them.
+        # Let's say: valid if symbolic is valid OR (scenarios exist AND all scenarios are valid)
+        # Actually, if symbolic is valid, it should be valid everywhere.
+        # If symbolic fails (e.g. too complex), scenarios might pass.
+        # If scenarios fail, symbolic should definitely fail (unless scenarios are wrong).
+        
+        is_valid = is_valid_symbolic
+        if not is_valid and self._scenarios:
+            is_valid = is_valid_scenarios
+        
+        # If scenarios exist but some fail, it's definitely invalid even if symbolic says yes?
+        # No, symbolic is ground truth. If symbolic says yes, it's yes.
+        # But if symbolic says "I don't know" (which is_equiv might not do, it returns bool),
+        # we rely on scenarios.
+        # For now, let's trust symbolic if True. If False, check scenarios.
         
         result = {
             "before": before,
             "after": after,
             "valid": is_valid,
-            "rule_id": None, # Could be enhanced with rule detection later
+            "rule_id": None,
             "details": {},
         }
+
+        if is_valid and self.knowledge_registry:
+            rule_node = self.knowledge_registry.match(before, after)
+            if rule_node:
+                result["rule_id"] = rule_node.id
+                result["details"]["rule"] = rule_node.to_metadata()
+        
+        if self._scenarios:
+            result["details"]["scenarios"] = scenario_results
         
         if is_valid:
             self._current_expr = after
         else:
             # Generate hint if invalid
-            if self.exercise_spec:
-                # For intermediate steps, we might want to hint based on the *previous* expression
-                # or just generic "not equivalent"
-                # The HintEngine is designed for final answers vs target, but can be adapted
-                # For now, we'll leave step-level hinting simple or future work
-                pass
+            # Use the previous expression as the target for the hint
+            hint = self.hint_engine.generate_hint(after, before)
+            result["details"]["hint"] = {
+                "message": hint.message,
+                "type": hint.hint_type
+            }
                 
         return result
 
@@ -175,7 +222,7 @@ class CoreRuntime(Engine):
             
             # If incorrect, generate hint
             if not validation_result.is_correct:
-                hint = self.hint_engine.generate_hint(final_expr, self.exercise_spec)
+                hint = self.hint_engine.generate_hint_for_spec(final_expr, self.exercise_spec)
                 result["details"]["hint"] = {
                     "message": hint.message,
                     "type": hint.hint_type

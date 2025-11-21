@@ -44,13 +44,19 @@ class HintEngine:
         self.computation_engine = computation_engine
         self.symbolic_engine = computation_engine.symbolic_engine
     
-    def generate_hint(self, user_expr: str, spec: ExerciseSpec) -> HintResult:
+    def generate_hint(
+        self, 
+        user_expr: str, 
+        target_expr: str, 
+        hint_rules: Optional[Dict[str, str]] = None
+    ) -> HintResult:
         """
-        Generate a hint for a user's answer.
+        Generate a hint for a user's answer against a specific target.
         
         Args:
             user_expr: The user's answer expression
-            spec: Exercise specification defining target and hint rules
+            target_expr: The target expression (correct answer or previous step)
+            hint_rules: Optional dictionary mapping error patterns to hints
             
         Returns:
             HintResult containing the hint message and metadata
@@ -65,8 +71,8 @@ class HintEngine:
             )
             
         # 2. Check for Pattern Matching (hint_rules)
-        if spec.hint_rules:
-            for pattern, hint_msg in spec.hint_rules.items():
+        if hint_rules:
+            for pattern, hint_msg in hint_rules.items():
                 try:
                     if self.symbolic_engine.is_equiv(user_expr, pattern):
                         return HintResult(
@@ -81,7 +87,7 @@ class HintEngine:
         
         # 3a. Sign Error (user == -target)
         try:
-            neg_target = f"-({spec.target_expression})"
+            neg_target = f"-({target_expr})"
             if self.symbolic_engine.is_equiv(user_expr, neg_target):
                 return HintResult(
                     message="It looks like you might have a sign error. Check your positives and negatives.",
@@ -91,41 +97,15 @@ class HintEngine:
             pass
             
         # 3b. Constant Offset (user - target == constant)
-        # This requires subtracting and checking if the result is a number
         try:
-            # We can check if simplify(user - target) is a number
-            diff_expr = f"({user_expr}) - ({spec.target_expression})"
+            diff_expr = f"({user_expr}) - ({target_expr})"
             simplified_diff = self.symbolic_engine.simplify(diff_expr)
             
-            # Check if simplified_diff is a number (not containing variables)
-            # A simple heuristic is checking if it converts to a float, 
-            # but we need to be careful about symbols.
-            # Let's try to evaluate it with empty context if possible, or check if it's numeric.
-            
-            # If we have SymPy, we can check is_number or similar, but here we rely on string output
-            # or numeric_eval.
-            
-            # If it's a number, numeric_eval should succeed with empty context (if no vars left)
-            # But if variables are left, it might fail or return symbolic.
-            
-            # Let's try numeric_eval. If it returns a number, then it's a constant offset.
-            # Note: numeric_eval might fail if variables are present and not bound.
-            # So if it succeeds, it's likely a constant.
-            
             try:
-                # We need to handle the case where variables are present in the original exprs
-                # but cancel out in the difference.
-                # numeric_eval with empty context might fail if variables are still there.
-                # But if they cancelled out, it should work.
-                
-                # However, SymbolicEngine.evaluate might raise error if variables are missing.
-                # Let's rely on the fact that simplify returns a string.
-                # If the string looks like a number, it's a constant offset.
-                
                 # A robust way: try to convert simplified_diff to float
-                float(simplified_diff)
+                val = float(simplified_diff)
                 # If successful and not 0 (which would mean correct answer)
-                if float(simplified_diff) != 0:
+                if val != 0:
                      return HintResult(
                         message="You're close, but your answer differs by a constant amount.",
                         hint_type="heuristic_constant_offset",
@@ -141,4 +121,21 @@ class HintEngine:
         return HintResult(
             message="Try checking your steps carefully.",
             hint_type="none"
+        )
+
+    def generate_hint_for_spec(self, user_expr: str, spec: ExerciseSpec) -> HintResult:
+        """
+        Generate a hint based on an ExerciseSpec (backward compatibility).
+        
+        Args:
+            user_expr: The user's answer expression
+            spec: Exercise specification
+            
+        Returns:
+            HintResult
+        """
+        return self.generate_hint(
+            user_expr, 
+            spec.target_expression, 
+            spec.hint_rules
         )

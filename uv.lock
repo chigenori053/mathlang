@@ -805,6 +805,7 @@ dependencies = [
     { name = "jupyter" },
     { name = "lark-parser" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "streamlit" },
     { name = "sympy" },
 ]
@@ -814,6 +815,7 @@ requires-dist = [
     { name = "jupyter", specifier = ">=1.0" },
     { name = "lark-parser", specifier = ">=0.12" },
     { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "streamlit", specifier = ">=1.38" },
     { name = "sympy", specifier = ">=1.13" },
 ]

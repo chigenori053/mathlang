@@ -185,3 +185,9 @@ class PrepareNode(Node):
 class CounterfactualNode(Node):
     assume: Dict[str, str] = field(default_factory=dict)
     expect: str | None = None
+
+
+@dataclass
+class ScenarioNode(Node):
+    name: str = ""
+    assignments: Dict[str, str] = field(default_factory=dict)

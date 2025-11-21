@@ -225,6 +225,50 @@ class ComputationEngine:
             # But SymbolicEngine.evaluate already handles numeric evaluation if variables are present
             raise
 
+    def evaluate_in_scenarios(self, expr: str, scenarios: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Evaluate an expression in multiple scenarios.
+        
+        Args:
+            expr: The expression to evaluate.
+            scenarios: A dictionary mapping scenario names to their contexts.
+            
+        Returns:
+            A dictionary mapping scenario names to evaluation results.
+        """
+        results = {}
+        for name, context in scenarios.items():
+            try:
+                results[name] = self.numeric_eval(expr, context)
+            except Exception as e:
+                results[name] = {"error": str(e)}
+        return results
+
+    def check_equivalence_in_scenarios(self, expr1: str, expr2: str, scenarios: Dict[str, Dict[str, Any]]) -> Dict[str, bool]:
+        """
+        Check if two expressions are equivalent in multiple scenarios.
+        
+        Args:
+            expr1: First expression.
+            expr2: Second expression.
+            scenarios: A dictionary mapping scenario names to their contexts.
+            
+        Returns:
+            A dictionary mapping scenario names to boolean equivalence results.
+        """
+        results = {}
+        for name, context in scenarios.items():
+            try:
+                val1 = self.numeric_eval(expr1, context)
+                val2 = self.numeric_eval(expr2, context)
+                # Use a small tolerance for float comparisons if needed, 
+                # but numeric_eval might return various types.
+                # For now, simple equality.
+                results[name] = (val1 == val2)
+            except Exception:
+                results[name] = False
+        return results
+
     def bind(self, name: str, value: Any) -> None:
         """
         Binds a variable to a value in the engine's context.

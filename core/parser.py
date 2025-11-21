@@ -109,6 +109,28 @@ class Parser:
                         expect=expect,
                     )
                 )
+            elif keyword == "scenario" and has_colon:
+                # scenario "Name":
+                #   var = value
+                name = self._strip_string_literal(tail.strip(), parsed.number)
+                block_lines, index = self._collect_block(index + 1)
+                assignments = {}
+                # Parse block lines as assignments
+                for raw in block_lines:
+                    stripped = raw.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    if "=" in stripped:
+                        key, value = stripped.split("=", 1)
+                        assignments[key.strip()] = self._normalize_expr(value.strip())
+                
+                nodes.append(
+                    ast.ScenarioNode(
+                        line=parsed.number,
+                        name=name,
+                        assignments=assignments
+                    )
+                )
             else:
                 raise SyntaxError(f"Unsupported statement on line {parsed.number}: {raw.strip()}")
 
