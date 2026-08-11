@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 .DS_Store
+.venv312/
+.venv*/
+uv.lock.bak
