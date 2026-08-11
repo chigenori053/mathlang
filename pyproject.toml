@@ -1,8 +1,10 @@
 [project]
 name = "mathlang"
 version = "0.1.0"
-description = "Add your description here"
+description = "MathLang — a DSL for capturing, replaying, and verifying mathematical reasoning"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "sympy>=1.13",

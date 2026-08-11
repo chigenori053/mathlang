@@ -211,3 +211,11 @@ uv add sympy pyyaml pytest
 - [ ] Specification updated for any CLI or directory layout changes.
 
 For coordination guidelines, see `Agent.md`.
+
+---
+
+## License
+
+MathLang is licensed under the [Apache License 2.0](LICENSE).
+
+MathLang は [Apache License 2.0](LICENSE) の下で公開されています。
