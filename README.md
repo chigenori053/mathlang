@@ -83,6 +83,15 @@ Each CLI keeps scenario definitions under its `scenarios/config.json`. These JSO
 
 You can add new entries to those files to expose additional `.mlang` programs without changing the CLI flags used by CI.
 
+## Web UI (Notebook風 + LSP診断/ホバー)
+`make web` (または `uv run streamlit run webapp/app.py`) でブラウザ上のノートブック風UIを起動できます。
+
+- セル単位でMathLang DSLを編集・実行(Jupyterに近い体験)。各セルは独立した`problem→step→end`プログラムです(セル間の変数共有・ディスクへの永続化は現状スコープ外)。
+- セルエディタは[tools/lsp/server.py](tools/lsp/server.py)のMathLang LSPサーバとWebSocket(`ws://127.0.0.1:2087`)経由でリアルタイム連携し、構文エラーの診断(赤波線)と`problem`/`step`/`end`等のDSLキーワードへのホバー説明を提供します(補完機能は対象外)。LSPサーバはWeb UI起動時に自動起動されるため、`make web`単体で完結します。単体で起動したい場合は`make lsp`。
+- サイドバーから`notebooks/sample_programs.py`のサンプルをセルとして挿入できます。
+- 実行結果には因果分析(矛盾ステップの原因・修正候補)も自動表示されます(`should_run_causal_analysis`が真の場合)。
+- 同じLSPサーバはプロトコル準拠のため、将来のVSCode拡張機能からもそのまま再利用できる設計です(拡張機能自体は今回のスコープ外)。
+
 ## Pro Edition
 プロフェッショナル向け CLI / デモについては `README_PRO.md` を参照。`python -m pro.cli ...` で直接呼び出せます。
 

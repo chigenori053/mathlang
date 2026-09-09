@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mathlang-web",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "streamlit", "run", "webapp/app.py", "--server.headless", "true"],
+      "port": 8501
+    }
+  ]
+}

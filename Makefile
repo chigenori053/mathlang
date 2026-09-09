@@ -27,6 +27,14 @@ test: ## Run pytest with python3.12 (adds TEST_PYTHONPATH when provided)
 run: ## Execute the CLI entrypoint with python3.12
 	$(PYTHON) main.py $(ARGS)
 
+.PHONY: web
+web: ## Launch the MathLang notebook-style web UI (Streamlit + LSP diagnostics/hover)
+	$(PYTHON) -m streamlit run webapp/app.py
+
+.PHONY: lsp
+lsp: ## Launch the MathLang LSP server standalone (ws://127.0.0.1:2087, diagnostics + hover)
+	$(PYTHON) -m tools.lsp.server
+
 .PHONY: clean
 clean: ## Remove Python cache artifacts
 	find . -name "__pycache__" -type d -prune -exec rm -rf {} +
