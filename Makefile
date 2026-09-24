@@ -11,9 +11,9 @@ help: ## Show available make targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?##"} {printf "\033[32m%-15s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: install
-install: ## Install/upgrade project dependencies using python3.12
+install: ## Install the project with all extras and test tools (editable)
 	$(PYTHON) -m pip install --upgrade pip
-	$(PYTHON) -m pip install -e .
+	$(PYTHON) -m pip install -e ".[all]" pytest
 
 .PHONY: test
 test: ## Run pytest with python3.12 (adds TEST_PYTHONPATH when provided)

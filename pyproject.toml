@@ -5,22 +5,27 @@ description = "MathLang — a DSL for capturing, replaying, and verifying mathem
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11"
+# Runtime needs only what the `mathlang` CLI / API imports; UI front ends are extras.
 dependencies = [
     "sympy>=1.13",
-    "lark-parser>=0.12",
-    "streamlit>=1.38",
-    "jupyter>=1.0",
-    "pytest>=8.4.2",
     "PyYAML>=6.0",
-    "pygls[ws]>=2.1.1",
 ]
+
+[project.optional-dependencies]
+web = ["streamlit>=1.38", "pygls[ws]>=2.1.1"]
+lsp = ["pygls[ws]>=2.1.1"]
+notebook = ["jupyter>=1.0"]
+all = ["mathlang[web,lsp,notebook]"]
+
+[dependency-groups]
+dev = ["pytest>=8.4.2", "mathlang[all]"]
 
 [project.scripts]
 mathlang = "mathlang.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

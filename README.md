@@ -124,7 +124,7 @@ Each CLI keeps scenario definitions under its `scenarios/config.json`. These JSO
 You can add new entries to those files to expose additional `.mlang` programs without changing the CLI flags used by CI.
 
 ## Web UI (Notebook風 + LSP診断/ホバー)
-`make web` (または `uv run streamlit run webapp/app.py`) でブラウザ上のノートブック風UIを起動できます。
+`make web` (または `uv run streamlit run webapp/app.py`) でブラウザ上のノートブック風UIを起動できます。pip で導入する場合は `pip install ".[web]"` が必要です。
 
 - セル単位でMathLang DSLを編集・実行(Jupyterに近い体験)。各セルは独立した`problem→step→end`プログラムです(セル間の変数共有・ディスクへの永続化は現状スコープ外)。
 - セルエディタは[tools/lsp/server.py](tools/lsp/server.py)のMathLang LSPサーバとWebSocket(`ws://127.0.0.1:2087`)経由でリアルタイム連携し、構文エラーの診断(赤波線)と`problem`/`step`/`end`等のDSLキーワードへのホバー説明を提供します(補完機能は対象外)。LSPサーバはWeb UI起動時に自動起動されるため、`make web`単体で完結します。単体で起動したい場合は`make lsp`。
@@ -235,14 +235,23 @@ print(graph_to_text(report["graph"]))
 3. **Phase 3** – Jupyter UI + learning logs (late Dec 2025)
 4. **Phase 4** – Educational beta release v0.9 (Jan 2026)
 
-## Environment Setup (macOS)
+## Environment Setup
+Python 3.11+ is supported (3.12 is the development default in `.python-version`).
+
 ```bash
-uv init
-uv python install 3.12
-uv python pin 3.12
-uv venv
-uv add sympy pyyaml pytest
+uv sync                        # runtime + all extras + pytest (development)
+uv run pytest
 ```
+
+With pip, pick only what you need:
+
+| Install | Provides |
+|---|---|
+| `pip install .` | `mathlang` CLI / `mathlang.api` (sympy + PyYAML only) |
+| `pip install ".[web]"` | + Streamlit notebook UI with LSP diagnostics |
+| `pip install ".[lsp]"` | + standalone LSP server |
+| `pip install ".[notebook]"` | + Jupyter |
+| `pip install -e ".[all]" pytest` | everything, for development (`make install`) |
 
 ## Contribution Basics
 - Branching: `main` (stable), `dev`, `feature/*`
