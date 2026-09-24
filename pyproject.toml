@@ -16,6 +16,19 @@ dependencies = [
     "pygls[ws]>=2.1.1",
 ]
 
+[project.scripts]
+mathlang = "mathlang.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mathlang*", "core*", "cli*", "edu*", "pro*", "demo*", "webapp*", "tools*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.json", "*.mlang"]
+
 [tool.pytest.ini_options]
 pythonpath = [
     ".",

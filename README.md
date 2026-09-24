@@ -58,7 +58,47 @@ Step (unnamed): 32
 End: 32
 ```
 
-## CLI Usage
+## `mathlang` Command
+`pip install -e .` (or `uv sync`) installs the `mathlang` command; `python -m mathlang` works without installing.
+
+```console
+$ mathlang eval "sqrt(2)/2 + x" -v x=1/3
+1/3 + sqrt(2)/2  ≈ 1.04044011451988
+$ mathlang simplify "sin(x)^2 + cos(x)^2"
+1
+$ mathlang factor "x^2 - 1" --json
+{"ok": true, "command": "factor", "input": {"expr": "x^2 - 1"}, "result": "(x - 1)*(x + 1)"}
+$ mathlang equiv "(x + 1)^2" "x^2 + 2*x + 1"
+equivalent
+$ mathlang convert "3*kilometer" meter
+3000*meter
+$ mathlang run edu/examples/pythagorean.mlang     # "-" reads stdin, -c takes inline code
+...
+Result: verified
+$ mathlang repl                                   # :help lists the REPL commands
+mathlang> x = 3
+x = 3
+mathlang> x^2 + 1/2
+19/2  ≈ 9.50000000000000
+```
+
+| Subcommand | Purpose |
+|---|---|
+| `run FILE \| -c CODE [--mode symbolic\|polynomial]` | Run a `.mlang` program and verify every step |
+| `eval EXPR [-v NAME=VALUE ...] [--precision N]` | Exact value and decimal approximation |
+| `simplify` / `expand` / `factor EXPR` | Algebraic transformations |
+| `subs EXPR -v NAME=VALUE ...` | Substitute variables |
+| `equiv EXPR1 EXPR2` | Equivalence check |
+| `convert EXPR UNIT` | Unit conversion |
+| `repl` | Interactive session (variables, `ans`, inline `:dsl` blocks) |
+
+Every subcommand accepts `--json` for machine-readable output and `--timeout SECONDS` (default 10, `0` disables).
+Exit status: `0` success, `1` evaluation error / not equivalent / a step or end that failed verification, `2` usage error.
+
+Expressions are parsed through a whitelist (`core/safe_parse.py`): arithmetic, comparisons and known math functions only, so input can never execute Python code.
+Front ends should call `mathlang.api` rather than wiring the core engines themselves.
+
+## Legacy CLI Usage
 - Run a `.mlang` file: `python main.py --file edu/examples/pythagorean.mlang`
 - Run an inline snippet: `python main.py -c "problem: 1 + 1\nend: 2"`
 - Switch to the polynomial evaluator: `python main.py --mode polynomial --file edu/examples/polynomial_arithmetic.mlang`

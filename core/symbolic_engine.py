@@ -8,6 +8,7 @@ from fractions import Fraction
 from typing import Any, Dict, Sequence, Set
 
 from .errors import InvalidExprError, EvaluationError
+from .safe_parse import safe_sympify
 
 try:  # pragma: no cover - SymPy is an optional dependency at import time.
     import sympy as _sympy
@@ -91,10 +92,7 @@ class SymbolicEngine:
     def to_internal(self, expr: str) -> Any:
         if self._fallback is not None:
             return self._fallback.parse(expr)
-        try:
-            return _sympy.sympify(expr)
-        except Exception as exc:  # pragma: no cover - SymPy provides details.
-            raise InvalidExprError(str(exc)) from exc
+        return safe_sympify(expr)
 
     def is_equiv(self, expr1: str, expr2: str) -> bool:
         if self._fallback is not None:

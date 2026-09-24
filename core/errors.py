@@ -33,3 +33,7 @@ class EvaluationError(MathLangError):
 
 class ExtraContentError(MathLangError):
     """Raised when additional statements appear after an end declaration."""
+
+
+class EvaluationTimeoutError(EvaluationError):
+    """Raised when an evaluation exceeds its time limit."""

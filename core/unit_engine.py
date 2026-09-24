@@ -5,8 +5,9 @@ UnitEngine module for handling unit conversions and dimensional analysis.
 from typing import Any, Optional, Dict
 import sympy.physics.units as units
 from sympy.physics.units.systems.si import SI
-from sympy import sympify, Expr
+from sympy import Expr
 
+from core.safe_parse import safe_sympify
 from core.symbolic_engine import SymbolicEngine
 
 
@@ -35,7 +36,7 @@ class UnitEngine:
             if not name.startswith("_")
         }
         
-        return sympify(expr, locals=unit_locals)
+        return safe_sympify(expr, locals=unit_locals)
 
     def convert(self, expr: str, target_unit: str) -> str:
         """
